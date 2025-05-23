@@ -32,16 +32,8 @@ interface PodcastOpportunity {
   id: number;
   podcastName: string;
   hostName: string;
-  category: string;
-  listenerCount: number;
-  episodeTitle: string;
-  episodeDescription: string;
-  publishDate: string;
-  duration: string;
-  podcastWebsite?: string;
-  contactEmail?: string;
-  coverImageUrl?: string;
-  relevanceScore: number;
+  podcastFocus: string;
+  podcastUrl: string;
   source: 'podscan' | 'listennotes';
   status: 'pending' | 'approved' | 'rejected' | 'contacted';
   notes?: string;
@@ -110,13 +102,6 @@ function OpportunityCard({ opportunity }: { opportunity: PodcastOpportunity }) {
     updateStatusMutation.mutate({ id: opportunity.id, status: 'rejected' });
   };
 
-  const getRelevanceColor = (score: number) => {
-    if (score >= 90) return "text-green-600 bg-green-50";
-    if (score >= 75) return "text-blue-600 bg-blue-50";
-    if (score >= 60) return "text-yellow-600 bg-yellow-50";
-    return "text-gray-600 bg-gray-50";
-  };
-
   const StatusIcon = statusConfig[opportunity.status].icon;
 
   return (
@@ -135,53 +120,28 @@ function OpportunityCard({ opportunity }: { opportunity: PodcastOpportunity }) {
             </div>
             <CardTitle className="text-lg">{opportunity.podcastName}</CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Hosted by {opportunity.hostName} • {opportunity.category}
+              Hosted by {opportunity.hostName}
             </p>
-          </div>
-          <div className={`px-3 py-1 rounded-full text-sm font-semibold ${getRelevanceColor(opportunity.relevanceScore)}`}>
-            {opportunity.relevanceScore}% Match
           </div>
         </div>
       </CardHeader>
       
       <CardContent className="space-y-4">
         <div>
-          <h4 className="font-medium text-gray-900 mb-2">Episode: {opportunity.episodeTitle}</h4>
-          <p className="text-sm text-gray-600 line-clamp-3">{opportunity.episodeDescription}</p>
+          <p className="text-sm text-gray-600 line-clamp-3">{opportunity.podcastFocus}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="flex items-center text-gray-600">
-            <Users className="w-4 h-4 mr-2" />
-            {opportunity.listenerCount.toLocaleString()} listeners
-          </div>
-          <div className="flex items-center text-gray-600">
-            <Play className="w-4 h-4 mr-2" />
-            {opportunity.duration}
-          </div>
-          <div className="flex items-center text-gray-600">
-            <Calendar className="w-4 h-4 mr-2" />
-            {new Date(opportunity.publishDate).toLocaleDateString()}
-          </div>
-          <div className="flex items-center text-gray-600">
-            <Podcast className="w-4 h-4 mr-2" />
-            {opportunity.category}
-          </div>
+        <div className="pt-2">
+          <a 
+            href={opportunity.podcastUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center text-sm text-primary hover:text-primary/80"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Visit Podcast
+          </a>
         </div>
-
-        {opportunity.podcastWebsite && (
-          <div className="pt-2">
-            <a 
-              href={opportunity.podcastWebsite} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-sm text-primary hover:text-primary/80"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Visit Podcast Website
-            </a>
-          </div>
-        )}
 
         {opportunity.status === 'pending' && (
           <div className="flex space-x-2 pt-4 border-t">
