@@ -37,7 +37,7 @@ function Router() {
           <Route path="/discover" component={PodcastDiscovery} />
           <Route path="/questionnaire" component={Questionnaire} />
           <Route path="/media-kit" component={MediaKit} />
-          <Route path="/pitch-generator" component={PitchGenerator} />
+          <Route path="/angle-generator" component={PitchGenerator} />
           <Route path="/approvals" component={Approvals} />
           <Route path="/tracking" component={PlacementTracking} />
           <Route path="/settings" component={Settings} />

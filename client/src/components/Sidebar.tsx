@@ -18,7 +18,7 @@ const navigation = [
   { name: "Discover Podcasts", href: "/discover", icon: Search },
   // { name: "Questionnaire", href: "/questionnaire", icon: ClipboardList },
   { name: "Media Kit", href: "/media-kit", icon: FolderOpen },
-  { name: "Pitch Generator", href: "/pitch-generator", icon: Lightbulb },
+  { name: "Angle Generator", href: "/angle-generator", icon: Lightbulb },
   { name: "Approvals", href: "/approvals", icon: CheckCircle },
   { name: "Placement Tracking", href: "/tracking", icon: TrendingUp },
 ];

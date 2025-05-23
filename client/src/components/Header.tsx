@@ -21,8 +21,8 @@ const pageInfo: Record<string, { title: string; description: string }> = {
     title: "Media Kit",
     description: "Create and manage your professional media kit.",
   },
-  "/pitch-generator": {
-    title: "Pitch Generator",
+  "/angle-generator": {
+    title: "Angle Generator",
     description: "Generate compelling pitch angles for podcast hosts.",
   },
   "/approvals": {

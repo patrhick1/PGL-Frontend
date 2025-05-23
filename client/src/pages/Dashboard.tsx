@@ -346,7 +346,7 @@ export default function Dashboard() {
                 <QuickActionButton
                   title="Generate Pitch Angle"
                   icon={Lightbulb}
-                  href="/pitch-generator"
+                  href="/angle-generator"
                   colorClass="bg-secondary/5 hover:bg-secondary/10"
                 />
                 <QuickActionButton
