@@ -488,7 +488,7 @@ function NotificationSettings() {
             <Button 
               type="submit" 
               disabled={updateNotifications.isPending}
-              className="bg-primary text-white hover:bg-blue-700"
+              className="bg-primary text-white hover:bg-yellow-700"
             >
               {updateNotifications.isPending ? (
                 <>
