@@ -29,31 +29,15 @@ import {
 
 interface PlacementRecord {
   id: number;
-  clientName: string;
   podcastName: string;
-  hostName: string;
-  episodeTitle: string;
-  category: string;
-  recordingDate: string;
-  publishDate: string;
-  episodeUrl?: string;
   status: 'responded' | 'interested' | 'form_submitted' | 'pending_intro_call' | 'intro_call_booked' | 'pending_podcast_booking' | 'recording_booked' | 'recording' | 'live_link' | 'paid';
-  listenerCount: number;
-  duration: string;
-  platformLinks: {
-    spotify?: string;
-    apple?: string;
-    google?: string;
-    website?: string;
-  };
-  notes?: string;
-  rating?: number;
-  downloads?: number;
-  engagement?: {
-    shares: number;
-    comments: number;
-    likes: number;
-  };
+  callDate: string;
+  hostName: string;
+  hostEmail: string;
+  interviewBriefLink?: string;
+  placementReach: number;
+  publishDate: string;
+  liveLink?: string;
 }
 
 const statusConfig = {
@@ -125,17 +109,15 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
       <Table>
         <TableHeader className="bg-gray-50">
           <TableRow>
-            <TableHead className="font-semibold text-gray-900">Client</TableHead>
             <TableHead className="font-semibold text-gray-900">Podcast</TableHead>
-            <TableHead className="font-semibold text-gray-900">Episode</TableHead>
-            <TableHead className="font-semibold text-gray-900">Host</TableHead>
-            <TableHead className="font-semibold text-gray-900">Category</TableHead>
-            <TableHead className="font-semibold text-gray-900">Recording Date</TableHead>
-            <TableHead className="font-semibold text-gray-900">Publish Date</TableHead>
             <TableHead className="font-semibold text-gray-900">Status</TableHead>
-            <TableHead className="font-semibold text-gray-900">Audience</TableHead>
-            <TableHead className="font-semibold text-gray-900">Links</TableHead>
-            <TableHead className="font-semibold text-gray-900">Performance</TableHead>
+            <TableHead className="font-semibold text-gray-900">Call Date</TableHead>
+            <TableHead className="font-semibold text-gray-900">Host Name</TableHead>
+            <TableHead className="font-semibold text-gray-900">Host Email</TableHead>
+            <TableHead className="font-semibold text-gray-900">Interview Brief</TableHead>
+            <TableHead className="font-semibold text-gray-900">Placement Reach</TableHead>
+            <TableHead className="font-semibold text-gray-900">Publish Date</TableHead>
+            <TableHead className="font-semibold text-gray-900">Live Link</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -144,46 +126,11 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
             return (
               <TableRow key={placement.id} className="hover:bg-gray-50">
                 <TableCell>
-                  <div className="font-medium text-gray-900">{placement.clientName}</div>
-                </TableCell>
-                
-                <TableCell>
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
                       <Podcast className="w-4 h-4 text-gray-500" />
                     </div>
-                    <div>
-                      <div className="font-medium text-gray-900">{placement.podcastName}</div>
-                      <div className="text-sm text-gray-500">{placement.duration}</div>
-                    </div>
-                  </div>
-                </TableCell>
-                
-                <TableCell>
-                  <div className="max-w-xs">
-                    <div className="font-medium text-gray-900 truncate">{placement.episodeTitle}</div>
-                  </div>
-                </TableCell>
-                
-                <TableCell>
-                  <div className="text-gray-900">{placement.hostName}</div>
-                </TableCell>
-                
-                <TableCell>
-                  <Badge variant="outline" className="bg-gray-50">
-                    {placement.category}
-                  </Badge>
-                </TableCell>
-                
-                <TableCell>
-                  <div className="text-gray-900">
-                    {new Date(placement.recordingDate).toLocaleDateString()}
-                  </div>
-                </TableCell>
-                
-                <TableCell>
-                  <div className="text-gray-900">
-                    {new Date(placement.publishDate).toLocaleDateString()}
+                    <div className="font-medium text-gray-900">{placement.podcastName}</div>
                   </div>
                 </TableCell>
                 
@@ -197,76 +144,66 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
                 </TableCell>
                 
                 <TableCell>
+                  <div className="text-gray-900">
+                    {new Date(placement.callDate).toLocaleDateString()}
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="text-gray-900">{placement.hostName}</div>
+                </TableCell>
+                
+                <TableCell>
+                  <a 
+                    href={`mailto:${placement.hostEmail}`}
+                    className="text-primary hover:text-primary/80 text-sm"
+                  >
+                    {placement.hostEmail}
+                  </a>
+                </TableCell>
+                
+                <TableCell>
+                  {placement.interviewBriefLink ? (
+                    <a 
+                      href={placement.interviewBriefLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
+                    >
+                      <ExternalLink className="w-3 h-3 mr-1" />
+                      Brief
+                    </a>
+                  ) : (
+                    <span className="text-gray-400 text-sm">Not available</span>
+                  )}
+                </TableCell>
+                
+                <TableCell>
                   <div className="flex items-center text-gray-900">
                     <Users className="w-4 h-4 mr-1 text-gray-400" />
-                    {placement.listenerCount.toLocaleString()}
-                  </div>
-                  {placement.downloads && (
-                    <div className="text-sm text-gray-500 mt-1">
-                      {placement.downloads.toLocaleString()} downloads
-                    </div>
-                  )}
-                </TableCell>
-                
-                <TableCell>
-                  <div className="flex items-center space-x-2">
-                    {placement.platformLinks.spotify && (
-                      <a 
-                        href={placement.platformLinks.spotify} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700"
-                        title="Spotify"
-                      >
-                        <PlayCircle className="w-4 h-4" />
-                      </a>
-                    )}
-                    {placement.platformLinks.apple && (
-                      <a 
-                        href={placement.platformLinks.apple} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-gray-600 hover:text-gray-700"
-                        title="Apple Podcasts"
-                      >
-                        <PlayCircle className="w-4 h-4" />
-                      </a>
-                    )}
-                    {placement.episodeUrl && (
-                      <a 
-                        href={placement.episodeUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:text-primary/80"
-                        title="Episode URL"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
+                    {placement.placementReach.toLocaleString()}
                   </div>
                 </TableCell>
                 
                 <TableCell>
-                  {placement.engagement && (
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Share2 className="w-3 h-3 mr-1" />
-                        {placement.engagement.shares}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MessageSquare className="w-3 h-3 mr-1" />
-                        {placement.engagement.comments}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Eye className="w-3 h-3 mr-1" />
-                        {placement.engagement.likes}
-                      </div>
-                    </div>
-                  )}
-                  {placement.rating && (
-                    <div className="flex items-center text-sm text-yellow-600 mt-2">
-                      ⭐ {placement.rating}/5
-                    </div>
+                  <div className="text-gray-900">
+                    {new Date(placement.publishDate).toLocaleDateString()}
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  {placement.liveLink ? (
+                    <a 
+                      href={placement.liveLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
+                    >
+                      <PlayCircle className="w-3 h-3 mr-1" />
+                      Listen
+                    </a>
+                  ) : (
+                    <span className="text-gray-400 text-sm">Not live yet</span>
                   )}
                 </TableCell>
               </TableRow>
@@ -287,113 +224,72 @@ export default function PlacementTracking() {
     queryKey: ['/api/placements'],
   });
 
-  // Sample data matching your workflow statuses
+  // Sample data for client placement tracking
   const mockPlacements: PlacementRecord[] = [
     {
       id: 1,
-      clientName: "Phillip Swan",
       podcastName: "AI Leadership Podcast",
-      hostName: "Sarah Chen",
-      episodeTitle: "Building Responsible AI at Scale",
-      category: "Technology",
-      recordingDate: "2024-01-15",
-      publishDate: "2024-01-22",
-      episodeUrl: "https://aileadership.com/episodes/responsible-ai",
       status: "paid",
-      listenerCount: 45000,
-      duration: "52 min",
-      platformLinks: {
-        spotify: "https://spotify.com/episode/123",
-        apple: "https://podcasts.apple.com/episode/123",
-        website: "https://aileadership.com/episodes/responsible-ai"
-      },
-      downloads: 12500,
-      engagement: {
-        shares: 234,
-        comments: 89,
-        likes: 456
-      },
-      rating: 5
+      callDate: "2024-01-15",
+      hostName: "Sarah Chen",
+      hostEmail: "sarah@aileadership.com",
+      interviewBriefLink: "https://docs.google.com/document/d/abc123",
+      placementReach: 45000,
+      publishDate: "2024-01-22",
+      liveLink: "https://aileadership.com/episodes/responsible-ai"
     },
     {
       id: 2,
-      clientName: "Phillip Swan",
       podcastName: "Future of Work Today",
-      hostName: "Mike Rodriguez",
-      episodeTitle: "AI Transformation in Enterprise",
-      category: "Business",
-      recordingDate: "2024-01-08",
-      publishDate: "2024-01-15",
       status: "live_link",
-      listenerCount: 32000,
-      duration: "38 min",
-      platformLinks: {
-        spotify: "https://spotify.com/episode/124",
-        apple: "https://podcasts.apple.com/episode/124"
-      },
-      downloads: 8900,
-      engagement: {
-        shares: 178,
-        comments: 45,
-        likes: 312
-      },
-      rating: 4
+      callDate: "2024-01-08",
+      hostName: "Mike Rodriguez",
+      hostEmail: "mike@futureofwork.com",
+      interviewBriefLink: "https://docs.google.com/document/d/def456",
+      placementReach: 32000,
+      publishDate: "2024-01-15",
+      liveLink: "https://futureofwork.com/episodes/ai-transformation"
     },
     {
       id: 3,
-      clientName: "John Smith",
       podcastName: "Tech Innovators",
-      hostName: "Jessica Park",
-      episodeTitle: "Customer-Centric AI Solutions",
-      category: "Technology",
-      recordingDate: "2024-01-20",
-      publishDate: "2024-01-25",
       status: "recording",
-      listenerCount: 28000,
-      duration: "45 min",
-      platformLinks: {}
+      callDate: "2024-01-20",
+      hostName: "Jessica Park",
+      hostEmail: "jessica@techinnovators.io",
+      interviewBriefLink: "https://docs.google.com/document/d/ghi789",
+      placementReach: 28000,
+      publishDate: "2024-01-25"
     },
     {
       id: 4,
-      clientName: "Maria Garcia",
       podcastName: "Startup Stories",
-      hostName: "David Kim",
-      episodeTitle: "Scaling AI in Healthcare",
-      category: "Healthcare",
-      recordingDate: "2024-01-25",
-      publishDate: "2024-02-01",
       status: "recording_booked",
-      listenerCount: 18000,
-      duration: "40 min",
-      platformLinks: {}
+      callDate: "2024-01-25",
+      hostName: "David Kim",
+      hostEmail: "david@startupstories.com",
+      placementReach: 18000,
+      publishDate: "2024-02-01"
     },
     {
       id: 5,
-      clientName: "Alex Chen",
       podcastName: "Business Growth Show",
-      hostName: "Jennifer Lopez",
-      episodeTitle: "AI Strategy for Small Business",
-      category: "Business",
-      recordingDate: "2024-01-30",
-      publishDate: "2024-02-05",
       status: "intro_call_booked",
-      listenerCount: 25000,
-      duration: "35 min",
-      platformLinks: {}
+      callDate: "2024-01-30",
+      hostName: "Jennifer Lopez",
+      hostEmail: "jen@businessgrowth.com",
+      placementReach: 25000,
+      publishDate: "2024-02-05"
     },
     {
       id: 6,
-      clientName: "Sarah Johnson",
       podcastName: "Marketing Minds",
-      hostName: "Tom Wilson",
-      episodeTitle: "AI in Digital Marketing",
-      category: "Marketing",
-      recordingDate: "2024-02-02",
-      publishDate: "2024-02-08",
       status: "form_submitted",
-      listenerCount: 15000,
-      duration: "42 min",
-      platformLinks: {}
+      callDate: "2024-02-02",
+      hostName: "Tom Wilson",
+      hostEmail: "tom@marketingminds.net",
+      placementReach: 15000,
+      publishDate: "2024-02-08"
     }
   ];
 
