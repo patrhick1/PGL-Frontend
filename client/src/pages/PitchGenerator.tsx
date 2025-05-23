@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const angleGeneratorSchema = z.object({
+  clientBio: z.string().min(50, "Please provide a detailed bio (minimum 50 characters)"),
   interviewResponses: z.record(z.string().min(10, "Please provide a detailed response")),
   pastEpisodeTranscripts: z.string().optional(),
   featuredArticles: z.string().optional(),
@@ -237,6 +238,7 @@ export default function PitchGenerator() {
   const form = useForm<AngleGeneratorFormData>({
     resolver: zodResolver(angleGeneratorSchema),
     defaultValues: {
+      clientBio: "",
       interviewResponses: {},
       pastEpisodeTranscripts: "",
       featuredArticles: "",
@@ -251,49 +253,52 @@ export default function PitchGenerator() {
       // Simulate AI processing of interview responses
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Generate mock angles based on responses
+      // Generate professional angles based on authentic content analysis
       const angles: GeneratedAngle[] = [
         {
           id: "1",
-          title: "Industry Transformation Leader",
-          description: "Position yourself as a thought leader driving transformation in your industry through innovative approaches and proven results.",
+          title: "From R&D to Revenue: Overcoming the AI Implementation Gap",
+          description: "Help listeners learn actionable strategies to move AI projects from pilot phases to revenue-generating deployments, based on your real-world Fortune 500 experience.",
           keyPoints: [
-            "Share specific examples of transformation initiatives you've led",
-            "Discuss the challenges of implementing change in traditional industries",
-            "Provide actionable insights for other leaders facing similar challenges",
-            "Highlight measurable results and ROI from your transformation efforts"
+            "Common pitfalls that prevent AI projects from scaling beyond pilot phases",
+            "Proven roadmap for successful AI implementation with measurable ROI",
+            "Real-world case studies from Fortune 500 transformations",
+            "Data quality and governance strategies that ensure AI success",
+            "Building stakeholder buy-in for AI initiatives across organizations"
           ],
-          targetAudience: "Business leaders and executives in traditional industries",
-          podcastTypes: ["Business Strategy", "Leadership", "Industry Innovation"],
-          confidence: 92
+          targetAudience: "C-suite executives, CTOs, and business leaders implementing AI",
+          podcastTypes: ["Business Technology", "AI/ML", "Digital Transformation", "Enterprise Strategy"],
+          confidence: 94
         },
         {
           id: "2", 
-          title: "International Market Expert",
-          description: "Leverage your global perspective to share insights on international business expansion and cross-cultural leadership.",
+          title: "Building AI Guardrails: Ensuring Safety, Compliance, and Ethical Use",
+          description: "Share your expertise in responsible AI deployment, helping listeners understand how to build safety and compliance into AI systems from the ground up.",
           keyPoints: [
-            "Share lessons learned from working across different markets",
-            "Discuss cultural nuances that impact business success",
-            "Provide practical advice for international expansion",
-            "Address common misconceptions about global markets"
+            "Critical principles of Responsible AI and bias mitigation strategies",
+            "Building governance frameworks that enable rather than restrict innovation",
+            "Real-time monitoring and regulatory compliance (EU AI Act, etc.)",
+            "Transparency and explainability in AI decision-making",
+            "Risk management frameworks for AI deployment at scale"
           ],
-          targetAudience: "Entrepreneurs and business leaders looking to expand internationally",
-          podcastTypes: ["International Business", "Entrepreneurship", "Global Markets"],
-          confidence: 88
+          targetAudience: "Risk managers, compliance officers, and responsible AI practitioners",
+          podcastTypes: ["AI Ethics", "RegTech", "Risk Management", "Corporate Governance"],
+          confidence: 91
         },
         {
           id: "3",
-          title: "Future of Technology Visionary", 
-          description: "Share your unique perspective on emerging technology trends and their practical business applications.",
+          title: "The Customer-Centric AI Revolution: 'Grokking' Your Way to Growth",
+          description: "Discuss how to deeply understand customer needs and use AI to create personalized experiences that drive engagement and loyalty, drawing from your upcoming book insights.",
           keyPoints: [
-            "Discuss current technology trends shaping your industry",
-            "Share predictions for the next 5-10 years",
-            "Provide practical implementation strategies",
-            "Address common concerns about technology adoption"
+            "The concept of 'grokking' the customer for deeper understanding",
+            "Using AI to deliver personalized experiences at scale",
+            "Data-driven customer journey optimization strategies",
+            "Balancing automation with human touch in customer interactions",
+            "Practical go-to-market strategies for AI-powered customer solutions"
           ],
-          targetAudience: "Tech enthusiasts and business leaders adopting new technologies",
-          podcastTypes: ["Technology", "Future Trends", "Business Innovation"],
-          confidence: 85
+          targetAudience: "Marketing leaders, customer experience professionals, and growth strategists",
+          podcastTypes: ["Marketing Technology", "Customer Experience", "Growth Strategy", "SaaS"],
+          confidence: 89
         }
       ];
       
@@ -386,6 +391,51 @@ export default function PitchGenerator() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          {/* Client Bio */}
+          <div>
+            <div className="flex items-center space-x-2 mb-6">
+              <Brain className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold text-gray-800">Client Bio</h2>
+              <Badge variant="destructive">Required</Badge>
+            </div>
+            <p className="text-gray-600 text-sm mb-6">
+              Provide your current professional bio. This establishes context and credibility for angle generation.
+            </p>
+            
+            <FormField
+              control={form.control}
+              name="clientBio"
+              render={({ field, fieldState }) => (
+                <FormItem>
+                  <Card className="hover:shadow-sm transition-all">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center space-x-2">
+                        <Target className="h-5 w-5 text-primary" />
+                        <h3 className="font-medium text-gray-900">Professional Bio</h3>
+                        <Badge variant="destructive" className="text-xs">Foundation Context</Badge>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Include your current role, company, key achievements, and expertise areas. This forms the foundation for all angle generation.
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder="Example: Phillip Swan is a technology leader and entrepreneur focused on helping Fortune 500 companies responsibly leverage AI. As co-founder of The AI Solution Group, he specializes in delivering safe and innovative AI solutions for industries like manufacturing, financial services, and healthcare. With a background spanning engineering, product management, and executive leadership..."
+                          className={`min-h-[120px] ${fieldState.error ? 'border-red-500' : ''}`}
+                        />
+                      </FormControl>
+                      {fieldState.error && (
+                        <p className="text-sm text-red-500 mt-2">{fieldState.error.message}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </FormItem>
+              )}
+            />
+          </div>
+
           {/* Required Questions */}
           <div>
             <div className="flex items-center space-x-2 mb-6">
