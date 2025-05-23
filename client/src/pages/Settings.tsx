@@ -817,17 +817,6 @@ function AccountDeletion() {
 export default function Settings() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <div className="text-center">
-        <div className="flex items-center justify-center mb-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <SettingsIcon className="h-6 w-6 text-primary" />
-          </div>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900">Account Settings</h1>
-        <p className="text-gray-600 mt-2">
-          Manage your account preferences and privacy settings.
-        </p>
-      </div>
 
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="grid w-full grid-cols-4">

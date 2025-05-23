@@ -629,7 +629,7 @@ export default function MediaKit() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Media Kits</h1>
           <p className="text-gray-600 mt-2">
@@ -643,7 +643,7 @@ export default function MediaKit() {
           <Plus className="mr-2 h-4 w-4" />
           Create Media Kit
         </Button>
-      </div>
+      </div> */}
 
       {mediaKits && mediaKits.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

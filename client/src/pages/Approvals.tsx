@@ -408,13 +408,6 @@ export default function Approvals() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-700">Podcast Approvals</h1>
-        <p className="text-gray-600 mt-2">
-          Review and approve podcast opportunities discovered by our automation tools
-        </p>
-      </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
