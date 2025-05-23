@@ -68,7 +68,7 @@ export default function Header() {
           </div>
           <div className="flex items-center space-x-4">
             <Button 
-              className="bg-primary text-white hover:bg-blue-700"
+              className="bg-primary text-white hover:bg-black-700"
               onClick={handleBookDemo}
             >
               <CalendarPlus className="mr-2 h-4 w-4" />
