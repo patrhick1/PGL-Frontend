@@ -44,7 +44,7 @@ export default function Landing() {
 
               <Button 
                 onClick={handleSignIn}
-                className="w-full bg-primary text-white hover:bg-blue-700 py-3 text-lg font-medium"
+                className="w-full bg-primary text-white hover:bg-secondary-700 py-3 text-lg font-medium"
               >
                 Sign In to Get Started
               </Button>
