@@ -467,17 +467,6 @@ export default function PlacementTracking() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-700">Placement Tracking</h1>
-          <p className="text-gray-600 mt-2">Monitor and analyze podcast appearance performance</p>
-        </div>
-        <Button className="bg-primary text-white">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Placement
-        </Button>
-      </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
