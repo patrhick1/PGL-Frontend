@@ -86,7 +86,7 @@ const statusConfig = {
     dotColor: "bg-indigo-500"
   },
   recording: {
-    label: "Recording",
+    label: "Recorded",
     icon: PlayCircle,
     color: "bg-red-100 text-red-800",
     dotColor: "bg-red-500"
