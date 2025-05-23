@@ -20,7 +20,7 @@ const navigation = [
   { name: "Media Kit", href: "/media-kit", icon: FolderOpen },
   { name: "Angle Generator", href: "/angle-generator", icon: Lightbulb },
   { name: "Approvals", href: "/approvals", icon: CheckCircle },
-  { name: "Placement Tracking", href: "/tracking", icon: TrendingUp },
+  { name: "Placement Tracking", href: "/placement-tracking", icon: TrendingUp },
 ];
 
 const accountNavigation = [

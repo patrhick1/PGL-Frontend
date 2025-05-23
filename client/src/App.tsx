@@ -39,7 +39,7 @@ function Router() {
           <Route path="/media-kit" component={MediaKit} />
           <Route path="/angle-generator" component={PitchGenerator} />
           <Route path="/approvals" component={Approvals} />
-          <Route path="/tracking" component={PlacementTracking} />
+          <Route path="/placement-tracking" component={PlacementTracking} />
           <Route path="/settings" component={Settings} />
         </Layout>
       )}
