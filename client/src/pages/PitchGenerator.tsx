@@ -23,7 +23,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const angleGeneratorSchema = z.object({
-  clientBio: z.string().min(50, "Please provide a detailed bio (minimum 50 characters)"),
   interviewResponses: z.record(z.string().min(10, "Please provide a detailed response")),
   pastEpisodeTranscripts: z.string().optional(),
   featuredArticles: z.string().optional(),
@@ -229,7 +228,7 @@ function InterviewQuestionCard({
   );
 }
 
-export default function PitchGenerator() {
+export default function AnglesGenerator() {
   const [currentStep, setCurrentStep] = useState<'interview' | 'angles'>('interview');
   const [generatedAngles, setGeneratedAngles] = useState<GeneratedAngle[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -342,7 +341,7 @@ export default function PitchGenerator() {
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-700">Generated Pitch Angles</h1>
+          <h1 className="text-3xl font-bold text-gray-700">Generated Angles</h1>
           <p className="text-gray-600 mt-2">
             Based on your interview responses, here are personalized pitch angles for podcast outreach.
           </p>
@@ -373,7 +372,7 @@ export default function PitchGenerator() {
             <Brain className="h-6 w-6 text-primary" />
           </div>
         </div>
-        <h1 className="text-3xl font-bold text-gray-700">AI Pitch Angle Generator</h1>
+        <h1 className="text-3xl font-bold text-gray-700">Angles Generator</h1>
         <p className="text-gray-600 mt-2">
           Complete this mock interview to generate personalized pitch angles for podcast outreach.
         </p>
