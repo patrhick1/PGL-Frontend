@@ -44,7 +44,7 @@ export default function Header() {
   const { user } = useAuth();
   
   const currentPage = pageInfo[location] || { 
-    title: "PodcastCRM", 
+    title: "PGL CRM", 
     description: "Professional podcast booking system" 
   };
 
@@ -63,7 +63,7 @@ export default function Header() {
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{currentPage.title}</h2>
+            <h2 className="text-xl font-semibold text-gray-700">{currentPage.title}</h2>
             <p className="text-sm text-gray-600 mt-1">{currentPage.description}</p>
           </div>
           <div className="flex items-center space-x-4">

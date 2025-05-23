@@ -17,7 +17,7 @@ export default function Landing() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Mic className="text-primary text-2xl h-8 w-8" />
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">PodcastCRM</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">PGL CRM</h1>
                 <p className="text-gray-600">Professional Podcast Booking System</p>
               </div>
 
