@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -23,6 +24,17 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const angleGeneratorSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  title: z.string().min(1, "Title is required"),
+  companyName: z.string().min(1, "Company name is required"),
+  socialLinks: z.object({
+    linkedin: z.string().url().optional().or(z.literal("")),
+    twitter: z.string().url().optional().or(z.literal("")),
+    website: z.string().url().optional().or(z.literal(""))
+  }),
+  existingPodcasts: z.string().optional(),
+  goal: z.string().min(1, "Goal is required"),
+  placementGoalNumber: z.number().min(1, "Placement goal number must be at least 1"),
   interviewResponses: z.record(z.string().min(10, "Please provide a detailed response")),
   pastEpisodeTranscripts: z.string().optional(),
   featuredArticles: z.string().optional(),
@@ -237,7 +249,17 @@ export default function AnglesGenerator() {
   const form = useForm<AngleGeneratorFormData>({
     resolver: zodResolver(angleGeneratorSchema),
     defaultValues: {
-      clientBio: "",
+      name: "",
+      title: "",
+      companyName: "",
+      socialLinks: {
+        linkedin: "",
+        twitter: "",
+        website: ""
+      },
+      existingPodcasts: "",
+      goal: "",
+      placementGoalNumber: 1,
       interviewResponses: {},
       pastEpisodeTranscripts: "",
       featuredArticles: "",
