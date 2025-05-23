@@ -37,7 +37,7 @@ interface PlacementRecord {
   recordingDate: string;
   publishDate: string;
   episodeUrl?: string;
-  status: 'scheduled' | 'recorded' | 'published' | 'live';
+  status: 'responded' | 'interested' | 'form_submitted' | 'pending_intro_call' | 'intro_call_booked' | 'pending_podcast_booking' | 'recording_booked' | 'recording' | 'live_link' | 'paid';
   listenerCount: number;
   duration: string;
   platformLinks: {
@@ -57,29 +57,65 @@ interface PlacementRecord {
 }
 
 const statusConfig = {
-  scheduled: {
-    label: "Scheduled",
-    icon: Calendar,
+  responded: {
+    label: "Responded",
+    icon: MessageSquare,
     color: "bg-blue-100 text-blue-800",
     dotColor: "bg-blue-500"
   },
-  recorded: {
-    label: "Recorded",
-    icon: Clock,
-    color: "bg-yellow-100 text-yellow-800",
-    dotColor: "bg-yellow-500"
-  },
-  published: {
-    label: "Published",
-    icon: CheckCircle,
+  interested: {
+    label: "Interested",
+    icon: Eye,
     color: "bg-green-100 text-green-800",
     dotColor: "bg-green-500"
   },
-  live: {
-    label: "Live",
-    icon: PlayCircle,
+  form_submitted: {
+    label: "Form Submitted",
+    icon: CheckCircle,
+    color: "bg-cyan-100 text-cyan-800",
+    dotColor: "bg-cyan-500"
+  },
+  pending_intro_call: {
+    label: "Pending Intro Call Booking",
+    icon: Calendar,
+    color: "bg-yellow-100 text-yellow-800",
+    dotColor: "bg-yellow-500"
+  },
+  intro_call_booked: {
+    label: "Intro Call Booked",
+    icon: Clock,
+    color: "bg-orange-100 text-orange-800",
+    dotColor: "bg-orange-500"
+  },
+  pending_podcast_booking: {
+    label: "Pending Podcast Booking",
+    icon: Calendar,
     color: "bg-purple-100 text-purple-800",
     dotColor: "bg-purple-500"
+  },
+  recording_booked: {
+    label: "Recording Booked",
+    icon: Calendar,
+    color: "bg-indigo-100 text-indigo-800",
+    dotColor: "bg-indigo-500"
+  },
+  recording: {
+    label: "Recording",
+    icon: PlayCircle,
+    color: "bg-red-100 text-red-800",
+    dotColor: "bg-red-500"
+  },
+  live_link: {
+    label: "Live Link",
+    icon: ExternalLink,
+    color: "bg-emerald-100 text-emerald-800",
+    dotColor: "bg-emerald-500"
+  },
+  paid: {
+    label: "Paid",
+    icon: CheckCircle,
+    color: "bg-green-100 text-green-800",
+    dotColor: "bg-green-500"
   }
 };
 
@@ -251,7 +287,7 @@ export default function PlacementTracking() {
     queryKey: ['/api/placements'],
   });
 
-  // Sample data matching Airtable structure
+  // Sample data matching your workflow statuses
   const mockPlacements: PlacementRecord[] = [
     {
       id: 1,
@@ -263,7 +299,7 @@ export default function PlacementTracking() {
       recordingDate: "2024-01-15",
       publishDate: "2024-01-22",
       episodeUrl: "https://aileadership.com/episodes/responsible-ai",
-      status: "published",
+      status: "paid",
       listenerCount: 45000,
       duration: "52 min",
       platformLinks: {
@@ -288,7 +324,7 @@ export default function PlacementTracking() {
       category: "Business",
       recordingDate: "2024-01-08",
       publishDate: "2024-01-15",
-      status: "published",
+      status: "live_link",
       listenerCount: 32000,
       duration: "38 min",
       platformLinks: {
@@ -312,7 +348,7 @@ export default function PlacementTracking() {
       category: "Technology",
       recordingDate: "2024-01-20",
       publishDate: "2024-01-25",
-      status: "recorded",
+      status: "recording",
       listenerCount: 28000,
       duration: "45 min",
       platformLinks: {}
@@ -326,9 +362,37 @@ export default function PlacementTracking() {
       category: "Healthcare",
       recordingDate: "2024-01-25",
       publishDate: "2024-02-01",
-      status: "scheduled",
+      status: "recording_booked",
       listenerCount: 18000,
       duration: "40 min",
+      platformLinks: {}
+    },
+    {
+      id: 5,
+      clientName: "Alex Chen",
+      podcastName: "Business Growth Show",
+      hostName: "Jennifer Lopez",
+      episodeTitle: "AI Strategy for Small Business",
+      category: "Business",
+      recordingDate: "2024-01-30",
+      publishDate: "2024-02-05",
+      status: "intro_call_booked",
+      listenerCount: 25000,
+      duration: "35 min",
+      platformLinks: {}
+    },
+    {
+      id: 6,
+      clientName: "Sarah Johnson",
+      podcastName: "Marketing Minds",
+      hostName: "Tom Wilson",
+      episodeTitle: "AI in Digital Marketing",
+      category: "Marketing",
+      recordingDate: "2024-02-02",
+      publishDate: "2024-02-08",
+      status: "form_submitted",
+      listenerCount: 15000,
+      duration: "42 min",
       platformLinks: {}
     }
   ];
@@ -347,12 +411,12 @@ export default function PlacementTracking() {
 
   const stats = {
     total: displayPlacements.length,
-    published: displayPlacements.filter(p => p.status === 'published').length,
+    paid: displayPlacements.filter(p => p.status === 'paid').length,
     totalReach: displayPlacements.reduce((sum, p) => sum + p.listenerCount, 0),
     averageRating: displayPlacements.filter(p => p.rating).reduce((sum, p) => sum + (p.rating || 0), 0) / displayPlacements.filter(p => p.rating).length || 0
   };
 
-  const categories = [...new Set(displayPlacements.map(p => p.category))];
+  const categories = Array.from(new Set(displayPlacements.map(p => p.category)));
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -386,8 +450,8 @@ export default function PlacementTracking() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Published</p>
-                <p className="text-3xl font-bold text-green-600">{stats.published}</p>
+                <p className="text-sm font-medium text-gray-600">Paid</p>
+                <p className="text-3xl font-bold text-green-600">{stats.paid}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-400" />
             </div>
@@ -441,10 +505,16 @@ export default function PlacementTracking() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="recorded">Recorded</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="live">Live</SelectItem>
+                  <SelectItem value="responded">Responded</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
+                  <SelectItem value="form_submitted">Form Submitted</SelectItem>
+                  <SelectItem value="pending_intro_call">Pending Intro Call</SelectItem>
+                  <SelectItem value="intro_call_booked">Intro Call Booked</SelectItem>
+                  <SelectItem value="pending_podcast_booking">Pending Podcast Booking</SelectItem>
+                  <SelectItem value="recording_booked">Recording Booked</SelectItem>
+                  <SelectItem value="recording">Recording</SelectItem>
+                  <SelectItem value="live_link">Live Link</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
                 </SelectContent>
               </Select>
 
