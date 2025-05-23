@@ -1,263 +1,367 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   CheckCircle, 
   Clock, 
   XCircle, 
-  Calendar, 
   Search, 
   Filter,
   Podcast,
   Users,
   ExternalLink,
   Eye,
-  MessageSquare
+  ThumbsUp,
+  ThumbsDown,
+  Star,
+  Play,
+  Calendar,
+  LayoutGrid,
+  List
 } from "lucide-react";
 
-interface BookingWithPodcast {
+interface PodcastOpportunity {
   id: number;
-  status: string;
-  pitchAngle?: string;
-  mediaKitUrl?: string;
-  scheduledDate?: string;
-  recordingDate?: string;
-  publishDate?: string;
-  episodeUrl?: string;
+  podcastName: string;
+  hostName: string;
+  category: string;
+  listenerCount: number;
+  episodeTitle: string;
+  episodeDescription: string;
+  publishDate: string;
+  duration: string;
+  podcastWebsite?: string;
+  contactEmail?: string;
+  coverImageUrl?: string;
+  relevanceScore: number;
+  source: 'podscan' | 'listennotes';
+  status: 'pending' | 'approved' | 'rejected' | 'contacted';
   notes?: string;
   createdAt: string;
-  updatedAt: string;
-  podcast: {
-    id: number;
-    name: string;
-    host: string;
-    category: string;
-    listenerCount: number;
-    coverImageUrl?: string;
-    website?: string;
-    contactEmail?: string;
-  };
 }
 
 const statusConfig = {
   pending: {
     label: "Pending Review",
-    color: "bg-warning text-white",
     icon: Clock,
-    description: "Awaiting response from podcast host",
+    color: "bg-yellow-100 text-yellow-800"
   },
   approved: {
     label: "Approved",
-    color: "bg-success text-white",
     icon: CheckCircle,
-    description: "Your application has been accepted",
+    color: "bg-green-100 text-green-800"
   },
   rejected: {
     label: "Rejected",
-    color: "bg-error text-white",
     icon: XCircle,
-    description: "Application was declined",
+    color: "bg-red-100 text-red-800"
   },
-  scheduled: {
-    label: "Scheduled",
-    color: "bg-blue-500 text-white",
-    icon: Calendar,
-    description: "Interview has been scheduled",
-  },
-  completed: {
-    label: "Completed",
-    color: "bg-green-600 text-white",
+  contacted: {
+    label: "Contacted",
     icon: CheckCircle,
-    description: "Episode has been recorded and published",
-  },
+    color: "bg-blue-100 text-blue-800"
+  }
 };
 
-function BookingCard({ booking }: { booking: BookingWithPodcast }) {
-  const status = statusConfig[booking.status as keyof typeof statusConfig] || statusConfig.pending;
-  const StatusIcon = status.icon;
+const sourceConfig = {
+  podscan: {
+    label: "PodScan",
+    color: "bg-purple-100 text-purple-800"
+  },
+  listennotes: {
+    label: "Listen Notes",
+    color: "bg-blue-100 text-blue-800"
+  }
+};
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Not scheduled";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+function OpportunityCard({ opportunity }: { opportunity: PodcastOpportunity }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      return apiRequest(`/api/podcast-opportunities/${id}`, {
+        method: 'PATCH',
+        body: { status }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/podcast-opportunities'] });
+      toast({
+        title: "Status updated",
+        description: "Podcast opportunity status has been updated successfully.",
+      });
+    }
+  });
+
+  const handleApprove = () => {
+    updateStatusMutation.mutate({ id: opportunity.id, status: 'approved' });
   };
 
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return "Just now";
-    if (diffInHours < 24) return `${diffInHours} hours ago`;
-    if (diffInHours < 48) return "1 day ago";
-    return `${Math.floor(diffInHours / 24)} days ago`;
+  const handleReject = () => {
+    updateStatusMutation.mutate({ id: opportunity.id, status: 'rejected' });
   };
+
+  const getRelevanceColor = (score: number) => {
+    if (score >= 90) return "text-green-600 bg-green-50";
+    if (score >= 75) return "text-blue-600 bg-blue-50";
+    if (score >= 60) return "text-yellow-600 bg-yellow-50";
+    return "text-gray-600 bg-gray-50";
+  };
+
+  const StatusIcon = statusConfig[opportunity.status].icon;
 
   return (
-    <Card className="card-hover">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              {booking.podcast.coverImageUrl ? (
-                <img
-                  src={booking.podcast.coverImageUrl}
-                  alt={booking.podcast.name}
-                  className="w-16 h-16 rounded-lg object-cover"
-                />
-              ) : (
-                <Podcast className="h-8 w-8 text-gray-500" />
-              )}
+    <Card className="hover:shadow-md transition-all">
+      <CardHeader className="pb-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-2">
+              <Badge className={sourceConfig[opportunity.source].color}>
+                {sourceConfig[opportunity.source].label}
+              </Badge>
+              <Badge className={statusConfig[opportunity.status].color}>
+                <StatusIcon className="w-3 h-3 mr-1" />
+                {statusConfig[opportunity.status].label}
+              </Badge>
             </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">{booking.podcast.name}</h3>
-              <p className="text-sm text-gray-600">by {booking.podcast.host}</p>
-              <div className="flex items-center mt-1 space-x-3 text-xs text-gray-500">
-                <span className="flex items-center">
-                  <Users className="h-3 w-3 mr-1" />
-                  {(booking.podcast.listenerCount / 1000).toFixed(0)}K listeners
-                </span>
-                <span>•</span>
-                <span>{booking.podcast.category}</span>
-              </div>
-            </div>
+            <CardTitle className="text-lg">{opportunity.podcastName}</CardTitle>
+            <p className="text-sm text-gray-600 mt-1">
+              Hosted by {opportunity.hostName} • {opportunity.category}
+            </p>
           </div>
-          
-          <div className="flex flex-col items-end space-y-2">
-            <Badge className={status.color}>
-              <StatusIcon className="h-3 w-3 mr-1" />
-              {status.label}
-            </Badge>
-            <span className="text-xs text-gray-500">{getTimeAgo(booking.updatedAt)}</span>
+          <div className={`px-3 py-1 rounded-full text-sm font-semibold ${getRelevanceColor(opportunity.relevanceScore)}`}>
+            {opportunity.relevanceScore}% Match
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2">Episode: {opportunity.episodeTitle}</h4>
+          <p className="text-sm text-gray-600 line-clamp-3">{opportunity.episodeDescription}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex items-center text-gray-600">
+            <Users className="w-4 h-4 mr-2" />
+            {opportunity.listenerCount.toLocaleString()} listeners
+          </div>
+          <div className="flex items-center text-gray-600">
+            <Play className="w-4 h-4 mr-2" />
+            {opportunity.duration}
+          </div>
+          <div className="flex items-center text-gray-600">
+            <Calendar className="w-4 h-4 mr-2" />
+            {new Date(opportunity.publishDate).toLocaleDateString()}
+          </div>
+          <div className="flex items-center text-gray-600">
+            <Podcast className="w-4 h-4 mr-2" />
+            {opportunity.category}
           </div>
         </div>
 
-        {booking.pitchAngle && (
-          <div className="mb-4">
-            <span className="text-sm font-medium text-gray-700">Pitch Angle: </span>
-            <span className="text-sm text-gray-600">{booking.pitchAngle}</span>
+        {opportunity.podcastWebsite && (
+          <div className="pt-2">
+            <a 
+              href={opportunity.podcastWebsite} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center text-sm text-primary hover:text-primary/80"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Visit Podcast Website
+            </a>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-700">Applied: </span>
-            <span className="text-gray-600">{formatDate(booking.createdAt)}</span>
-          </div>
-          {booking.scheduledDate && (
-            <div>
-              <span className="font-medium text-gray-700">Scheduled: </span>
-              <span className="text-gray-600">{formatDate(booking.scheduledDate)}</span>
-            </div>
-          )}
-          {booking.recordingDate && (
-            <div>
-              <span className="font-medium text-gray-700">Recorded: </span>
-              <span className="text-gray-600">{formatDate(booking.recordingDate)}</span>
-            </div>
-          )}
-        </div>
-
-        {booking.notes && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <span className="text-sm font-medium text-gray-700">Notes: </span>
-            <p className="text-sm text-gray-600 mt-1">{booking.notes}</p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-          <p className="text-sm text-gray-600">{status.description}</p>
-          
-          <div className="flex space-x-2">
-            {booking.podcast.website && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={booking.podcast.website} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-1" />
-                  Visit
-                </a>
-              </Button>
-            )}
-            {booking.episodeUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={booking.episodeUrl} target="_blank" rel="noopener noreferrer">
-                  <Eye className="h-4 w-4 mr-1" />
-                  Listen
-                </a>
-              </Button>
-            )}
-            <Button variant="outline" size="sm">
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contact Host
+        {opportunity.status === 'pending' && (
+          <div className="flex space-x-2 pt-4 border-t">
+            <Button
+              onClick={handleApprove}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              disabled={updateStatusMutation.isPending}
+            >
+              <ThumbsUp className="w-4 h-4 mr-2" />
+              Approve
+            </Button>
+            <Button
+              onClick={handleReject}
+              variant="outline"
+              className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+              disabled={updateStatusMutation.isPending}
+            >
+              <ThumbsDown className="w-4 h-4 mr-2" />
+              Reject
             </Button>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function StatusOverview({ bookings }: { bookings: BookingWithPodcast[] }) {
-  const statusCounts = bookings.reduce((acc, booking) => {
-    acc[booking.status] = (acc[booking.status] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+function OpportunityTable({ opportunities }: { opportunities: PodcastOpportunity[] }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const stats = [
-    {
-      label: "Total Applications",
-      value: bookings.length,
-      color: "bg-primary/10 text-primary",
-      icon: Podcast,
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      return apiRequest(`/api/podcast-opportunities/${id}`, {
+        method: 'PATCH',
+        body: { status }
+      });
     },
-    {
-      label: "Pending Review",
-      value: statusCounts.pending || 0,
-      color: "bg-warning/10 text-warning",
-      icon: Clock,
-    },
-    {
-      label: "Approved",
-      value: statusCounts.approved || 0,
-      color: "bg-success/10 text-success",
-      icon: CheckCircle,
-    },
-    {
-      label: "Completed",
-      value: statusCounts.completed || 0,
-      color: "bg-green-600/10 text-green-600",
-      icon: CheckCircle,
-    },
-  ];
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/podcast-opportunities'] });
+      toast({
+        title: "Status updated",
+        description: "Podcast opportunity status has been updated successfully.",
+      });
+    }
+  });
+
+  const handleApprove = (id: number) => {
+    updateStatusMutation.mutate({ id, status: 'approved' });
+  };
+
+  const handleReject = (id: number) => {
+    updateStatusMutation.mutate({ id, status: 'rejected' });
+  };
+
+  const getRelevanceColor = (score: number) => {
+    if (score >= 90) return "text-green-600";
+    if (score >= 75) return "text-blue-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-gray-600";
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      {stats.map((stat) => {
-        const Icon = stat.icon;
-        return (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Podcast</TableHead>
+            <TableHead>Episode</TableHead>
+            <TableHead>Host & Category</TableHead>
+            <TableHead>Audience</TableHead>
+            <TableHead>Match</TableHead>
+            <TableHead>Source</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {opportunities.map((opportunity) => {
+            const StatusIcon = statusConfig[opportunity.status].icon;
+            return (
+              <TableRow key={opportunity.id}>
+                <TableCell>
+                  <div className="flex items-center space-x-3">
+                    {opportunity.coverImageUrl ? (
+                      <img 
+                        src={opportunity.coverImageUrl} 
+                        alt={opportunity.podcastName}
+                        className="w-10 h-10 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <Podcast className="w-5 h-5 text-gray-500" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-medium">{opportunity.podcastName}</div>
+                      {opportunity.podcastWebsite && (
+                        <a 
+                          href={opportunity.podcastWebsite} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:text-primary/80 flex items-center mt-1"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Website
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="max-w-xs">
+                    <div className="font-medium text-sm truncate">{opportunity.episodeTitle}</div>
+                    <div className="text-xs text-gray-600 truncate">{opportunity.episodeDescription}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {opportunity.duration} • {new Date(opportunity.publishDate).toLocaleDateString()}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm">{opportunity.hostName}</div>
+                  <div className="text-xs text-gray-600">{opportunity.category}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center text-sm">
+                    <Users className="w-4 h-4 mr-1" />
+                    {opportunity.listenerCount.toLocaleString()}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className={`font-semibold ${getRelevanceColor(opportunity.relevanceScore)}`}>
+                    {opportunity.relevanceScore}%
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge className={sourceConfig[opportunity.source].color}>
+                    {sourceConfig[opportunity.source].label}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge className={statusConfig[opportunity.status].color}>
+                    <StatusIcon className="w-3 h-3 mr-1" />
+                    {statusConfig[opportunity.status].label}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {opportunity.status === 'pending' ? (
+                    <div className="flex space-x-1">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApprove(opportunity.id)}
+                        className="bg-green-600 hover:bg-green-700 px-2"
+                        disabled={updateStatusMutation.isPending}
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(opportunity.id)}
+                        className="border-red-200 text-red-600 hover:bg-red-50 px-2"
+                        disabled={updateStatusMutation.isPending}
+                      >
+                        <ThumbsDown className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {opportunity.status === 'approved' && 'Ready to contact'}
+                      {opportunity.status === 'rejected' && 'Not suitable'}
+                      {opportunity.status === 'contacted' && 'Outreach sent'}
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -265,176 +369,237 @@ function StatusOverview({ bookings }: { bookings: BookingWithPodcast[] }) {
 export default function Approvals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
-  const { data: bookings, isLoading } = useQuery<BookingWithPodcast[]>({
-    queryKey: ["/api/bookings"],
+  const { data: opportunities = [], isLoading } = useQuery({
+    queryKey: ['/api/podcast-opportunities'],
   });
 
-  const filteredBookings = (bookings || []).filter((booking) => {
-    const matchesSearch = 
-      booking.podcast.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.podcast.host.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.podcast.category.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
+  // Mock data for demonstration - replace with actual API call
+  const mockOpportunities: PodcastOpportunity[] = [
+    {
+      id: 1,
+      podcastName: "The AI Leadership Podcast",
+      hostName: "Sarah Chen",
+      category: "Technology",
+      listenerCount: 45000,
+      episodeTitle: "Building Responsible AI at Scale",
+      episodeDescription: "Deep dive into implementing AI governance frameworks that enable innovation while managing risk. Perfect fit for enterprise AI leaders.",
+      publishDate: "2024-01-15",
+      duration: "52 min",
+      podcastWebsite: "https://aileadership.com",
+      contactEmail: "sarah@aileadership.com",
+      relevanceScore: 94,
+      source: "podscan",
+      status: "pending",
+      createdAt: "2024-01-10"
+    },
+    {
+      id: 2,
+      podcastName: "Future of Work Today",
+      hostName: "Mike Rodriguez",
+      category: "Business",
+      listenerCount: 32000,
+      episodeTitle: "AI Transformation in Enterprise",
+      episodeDescription: "How Fortune 500 companies are successfully implementing AI solutions and overcoming common implementation challenges.",
+      publishDate: "2024-01-12",
+      duration: "38 min",
+      podcastWebsite: "https://futureofworktoday.com",
+      relevanceScore: 89,
+      source: "listennotes",
+      status: "pending",
+      createdAt: "2024-01-08"
+    },
+    {
+      id: 3,
+      podcastName: "Tech Innovators",
+      hostName: "Jessica Park",
+      category: "Technology",
+      listenerCount: 28000,
+      episodeTitle: "Customer-Centric AI Solutions",
+      episodeDescription: "Exploring how AI can enhance customer experiences while maintaining ethical standards and data privacy.",
+      publishDate: "2024-01-18",
+      duration: "45 min",
+      relevanceScore: 87,
+      source: "podscan",
+      status: "approved",
+      createdAt: "2024-01-12"
+    }
+  ];
+
+  const displayOpportunities = isLoading ? [] : mockOpportunities;
+
+  const filteredOpportunities = displayOpportunities.filter(opportunity => {
+    const matchesSearch = opportunity.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         opportunity.hostName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         opportunity.episodeTitle.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || opportunity.status === statusFilter;
+    const matchesSource = sourceFilter === "all" || opportunity.source === sourceFilter;
+    return matchesSearch && matchesStatus && matchesSource;
   });
 
-  const groupedBookings = {
-    active: filteredBookings.filter(b => ["pending", "approved", "scheduled"].includes(b.status)),
-    completed: filteredBookings.filter(b => b.status === "completed"),
-    rejected: filteredBookings.filter(b => b.status === "rejected"),
+  const stats = {
+    total: displayOpportunities.length,
+    pending: displayOpportunities.filter(o => o.status === 'pending').length,
+    approved: displayOpportunities.filter(o => o.status === 'approved').length,
+    rejected: displayOpportunities.filter(o => o.status === 'rejected').length
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-32 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      {bookings && bookings.length > 0 && <StatusOverview bookings={bookings} />}
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-gray-700">Podcast Approvals</h1>
+        <p className="text-gray-600 mt-2">
+          Review and approve podcast opportunities discovered by our automation tools
+        </p>
+      </div>
 
-      {/* Search and Filters */}
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Opportunities</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <Podcast className="h-8 w-8 text-gray-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending Review</p>
+                <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+              </div>
+              <Clock className="h-8 w-8 text-yellow-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Approved</p>
+                <p className="text-2xl font-bold text-green-600">{stats.approved}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Rejected</p>
+                <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+              </div>
+              <XCircle className="h-8 w-8 text-red-400" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and Controls */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <Input
-                placeholder="Search by podcast name, host, or category..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Filter className="h-5 w-5 text-gray-400" />
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search podcasts, hosts, episodes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-[180px]">
+                  <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending Review</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="podscan">PodScan</SelectItem>
+                  <SelectItem value="listennotes">Listen Notes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={viewMode === 'cards' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Cards
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+              >
+                <List className="h-4 w-4 mr-2" />
+                Table
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Results */}
-      {bookings && bookings.length > 0 ? (
-        <Tabs defaultValue="active" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="active">
-              Active ({groupedBookings.active.length})
-            </TabsTrigger>
-            <TabsTrigger value="completed">
-              Completed ({groupedBookings.completed.length})
-            </TabsTrigger>
-            <TabsTrigger value="rejected">
-              Rejected ({groupedBookings.rejected.length})
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="active" className="space-y-4 mt-6">
-            {groupedBookings.active.length > 0 ? (
-              groupedBookings.active.map((booking) => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Clock className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">No active applications</h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    {searchTerm || statusFilter !== "all" 
-                      ? "No applications match your search criteria."
-                      : "Start applying to podcasts to see your applications here."
-                    }
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="completed" className="space-y-4 mt-6">
-            {groupedBookings.completed.length > 0 ? (
-              groupedBookings.completed.map((booking) => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">No completed episodes</h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Episodes you've completed will appear here.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="rejected" className="space-y-4 mt-6">
-            {groupedBookings.rejected.length > 0 ? (
-              groupedBookings.rejected.map((booking) => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <XCircle className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">No rejected applications</h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Applications that were declined will appear here.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
+      {isLoading ? (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-4 text-gray-600">Loading podcast opportunities...</p>
+        </div>
+      ) : filteredOpportunities.length === 0 ? (
+        <div className="text-center py-12">
+          <Podcast className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">No opportunities found</h3>
+          <p className="text-gray-600">Try adjusting your filters or search terms.</p>
+        </div>
       ) : (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Podcast className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No podcast applications yet</h3>
-            <p className="mt-2 text-sm text-gray-500">
-              Start discovering and applying to podcasts to track your applications here.
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-sm text-gray-600">
+              Showing {filteredOpportunities.length} of {displayOpportunities.length} opportunities
             </p>
-            <Button className="mt-4 bg-primary text-white hover:bg-blue-700">
-              <Search className="mr-2 h-4 w-4" />
-              Discover Podcasts
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+
+          {viewMode === 'cards' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {filteredOpportunities.map((opportunity) => (
+                <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+              ))}
+            </div>
+          ) : (
+            <OpportunityTable opportunities={filteredOpportunities} />
+          )}
+        </div>
       )}
     </div>
   );

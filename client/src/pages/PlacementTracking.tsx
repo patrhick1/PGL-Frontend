@@ -3,10 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   TrendingUp, 
   Calendar, 
@@ -18,553 +17,483 @@ import {
   Podcast,
   Eye,
   Share2,
-  MessageSquare
+  MessageSquare,
+  Search,
+  Filter,
+  Plus,
+  Edit,
+  CheckCircle,
+  Clock,
+  AlertCircle
 } from "lucide-react";
 
-interface BookingWithPodcast {
+interface PlacementRecord {
   id: number;
-  status: string;
-  scheduledDate?: string;
-  recordingDate?: string;
-  publishDate?: string;
+  clientName: string;
+  podcastName: string;
+  hostName: string;
+  episodeTitle: string;
+  category: string;
+  recordingDate: string;
+  publishDate: string;
   episodeUrl?: string;
-  createdAt: string;
-  podcast: {
-    id: number;
-    name: string;
-    host: string;
-    category: string;
-    listenerCount: number;
-    coverImageUrl?: string;
+  status: 'scheduled' | 'recorded' | 'published' | 'live';
+  listenerCount: number;
+  duration: string;
+  platformLinks: {
+    spotify?: string;
+    apple?: string;
+    google?: string;
     website?: string;
   };
+  notes?: string;
+  rating?: number;
+  downloads?: number;
+  engagement?: {
+    shares: number;
+    comments: number;
+    likes: number;
+  };
 }
 
-interface PlacementStats {
-  totalPlacements: number;
-  totalReach: number;
-  averageRating: number;
-  completionRate: number;
-  monthlyPlacements: Array<{
-    month: string;
-    count: number;
-    reach: number;
-  }>;
-  topCategories: Array<{
-    category: string;
-    count: number;
-    percentage: number;
-  }>;
-}
+const statusConfig = {
+  scheduled: {
+    label: "Scheduled",
+    icon: Calendar,
+    color: "bg-blue-100 text-blue-800",
+    dotColor: "bg-blue-500"
+  },
+  recorded: {
+    label: "Recorded",
+    icon: Clock,
+    color: "bg-yellow-100 text-yellow-800",
+    dotColor: "bg-yellow-500"
+  },
+  published: {
+    label: "Published",
+    icon: CheckCircle,
+    color: "bg-green-100 text-green-800",
+    dotColor: "bg-green-500"
+  },
+  live: {
+    label: "Live",
+    icon: PlayCircle,
+    color: "bg-purple-100 text-purple-800",
+    dotColor: "bg-purple-500"
+  }
+};
 
-function PlacementCard({ booking }: { booking: BookingWithPodcast }) {
-  const isPublished = booking.status === "completed" && booking.episodeUrl;
-  const isRecorded = booking.recordingDate && !isPublished;
-  const isScheduled = booking.scheduledDate && !booking.recordingDate;
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Not scheduled";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const getStatusInfo = () => {
-    if (isPublished) {
-      return {
-        status: "Published",
-        color: "bg-success text-white",
-        icon: PlayCircle,
-        date: booking.publishDate,
-        description: "Episode is live and available to listeners",
-      };
-    } else if (isRecorded) {
-      return {
-        status: "Recorded",
-        color: "bg-blue-500 text-white",
-        icon: Calendar,
-        date: booking.recordingDate,
-        description: "Episode recorded, awaiting publication",
-      };
-    } else if (isScheduled) {
-      return {
-        status: "Scheduled",
-        color: "bg-warning text-white",
-        icon: Calendar,
-        date: booking.scheduledDate,
-        description: "Interview scheduled",
-      };
-    }
-    return {
-      status: "Confirmed",
-      color: "bg-primary text-white",
-      icon: Calendar,
-      date: booking.createdAt,
-      description: "Booking confirmed",
-    };
-  };
-
-  const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
-
-  // Mock performance metrics (in real app, these would come from analytics)
-  const mockMetrics = {
-    listens: Math.floor(booking.podcast.listenerCount * 0.4),
-    shares: Math.floor(booking.podcast.listenerCount * 0.02),
-    engagement: Math.floor(Math.random() * 30) + 70, // 70-100%
-  };
-
+function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
   return (
-    <Card className="card-hover">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              {booking.podcast.coverImageUrl ? (
-                <img
-                  src={booking.podcast.coverImageUrl}
-                  alt={booking.podcast.name}
-                  className="w-16 h-16 rounded-lg object-cover"
-                />
-              ) : (
-                <Podcast className="h-8 w-8 text-gray-500" />
-              )}
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">{booking.podcast.name}</h3>
-              <p className="text-sm text-gray-600">by {booking.podcast.host}</p>
-              <div className="flex items-center mt-1 space-x-3 text-xs text-gray-500">
-                <span className="flex items-center">
-                  <Users className="h-3 w-3 mr-1" />
-                  {(booking.podcast.listenerCount / 1000).toFixed(0)}K listeners
-                </span>
-                <span>•</span>
-                <span>{booking.podcast.category}</span>
-              </div>
-            </div>
-          </div>
-          
-          <Badge className={statusInfo.color}>
-            <StatusIcon className="h-3 w-3 mr-1" />
-            {statusInfo.status}
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-700">Date: </span>
-            <span className="text-gray-600">{formatDate(statusInfo.date)}</span>
-          </div>
-          {booking.recordingDate && (
-            <div>
-              <span className="font-medium text-gray-700">Recorded: </span>
-              <span className="text-gray-600">{formatDate(booking.recordingDate)}</span>
-            </div>
-          )}
-          {booking.publishDate && (
-            <div>
-              <span className="font-medium text-gray-700">Published: </span>
-              <span className="text-gray-600">{formatDate(booking.publishDate)}</span>
-            </div>
-          )}
-        </div>
-
-        {isPublished && (
-          <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
-            <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900">{mockMetrics.listens.toLocaleString()}</div>
-              <div className="text-xs text-gray-600">Listens</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900">{mockMetrics.shares}</div>
-              <div className="text-xs text-gray-600">Shares</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900">{mockMetrics.engagement}%</div>
-              <div className="text-xs text-gray-600">Engagement</div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-          <p className="text-sm text-gray-600">{statusInfo.description}</p>
-          
-          <div className="flex space-x-2">
-            {booking.podcast.website && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={booking.podcast.website} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-1" />
-                  Podcast
-                </a>
-              </Button>
-            )}
-            {booking.episodeUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={booking.episodeUrl} target="_blank" rel="noopener noreferrer">
-                  <PlayCircle className="h-4 w-4 mr-1" />
-                  Listen
-                </a>
-              </Button>
-            )}
-            {isPublished && (
-              <Button variant="outline" size="sm">
-                <Share2 className="h-4 w-4 mr-1" />
-                Share
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function StatsOverview({ bookings }: { bookings: BookingWithPodcast[] }) {
-  const publishedBookings = bookings.filter(b => b.status === "completed" && b.episodeUrl);
-  const totalReach = publishedBookings.reduce((sum, booking) => sum + booking.podcast.listenerCount, 0);
-  const completionRate = bookings.length > 0 ? (publishedBookings.length / bookings.length) * 100 : 0;
-
-  const stats = [
-    {
-      label: "Total Placements",
-      value: publishedBookings.length,
-      subtitle: `${bookings.length} total bookings`,
-      color: "bg-primary/10 text-primary",
-      icon: Podcast,
-    },
-    {
-      label: "Total Reach",
-      value: (totalReach / 1000).toFixed(0) + "K",
-      subtitle: "Combined audience size",
-      color: "bg-success/10 text-success",
-      icon: Users,
-    },
-    {
-      label: "Completion Rate",
-      value: completionRate.toFixed(0) + "%",
-      subtitle: "Bookings that aired",
-      color: "bg-blue-500/10 text-blue-500",
-      icon: TrendingUp,
-    },
-    {
-      label: "Avg. Audience",
-      value: publishedBookings.length > 0 ? (totalReach / publishedBookings.length / 1000).toFixed(0) + "K" : "0",
-      subtitle: "Per placement",
-      color: "bg-secondary/10 text-secondary",
-      icon: BarChart3,
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      {stats.map((stat) => {
-        const Icon = stat.icon;
-        return (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-xs text-gray-500">{stat.subtitle}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="rounded-lg border bg-white">
+      <Table>
+        <TableHeader className="bg-gray-50">
+          <TableRow>
+            <TableHead className="font-semibold text-gray-900">Client</TableHead>
+            <TableHead className="font-semibold text-gray-900">Podcast</TableHead>
+            <TableHead className="font-semibold text-gray-900">Episode</TableHead>
+            <TableHead className="font-semibold text-gray-900">Host</TableHead>
+            <TableHead className="font-semibold text-gray-900">Category</TableHead>
+            <TableHead className="font-semibold text-gray-900">Recording Date</TableHead>
+            <TableHead className="font-semibold text-gray-900">Publish Date</TableHead>
+            <TableHead className="font-semibold text-gray-900">Status</TableHead>
+            <TableHead className="font-semibold text-gray-900">Audience</TableHead>
+            <TableHead className="font-semibold text-gray-900">Links</TableHead>
+            <TableHead className="font-semibold text-gray-900">Performance</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {placements.map((placement) => {
+            const StatusIcon = statusConfig[placement.status].icon;
+            return (
+              <TableRow key={placement.id} className="hover:bg-gray-50">
+                <TableCell>
+                  <div className="font-medium text-gray-900">{placement.clientName}</div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <Podcast className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">{placement.podcastName}</div>
+                      <div className="text-sm text-gray-500">{placement.duration}</div>
+                    </div>
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="max-w-xs">
+                    <div className="font-medium text-gray-900 truncate">{placement.episodeTitle}</div>
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="text-gray-900">{placement.hostName}</div>
+                </TableCell>
+                
+                <TableCell>
+                  <Badge variant="outline" className="bg-gray-50">
+                    {placement.category}
+                  </Badge>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="text-gray-900">
+                    {new Date(placement.recordingDate).toLocaleDateString()}
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="text-gray-900">
+                    {new Date(placement.publishDate).toLocaleDateString()}
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${statusConfig[placement.status].dotColor}`}></div>
+                    <Badge className={statusConfig[placement.status].color}>
+                      {statusConfig[placement.status].label}
+                    </Badge>
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  <div className="flex items-center text-gray-900">
+                    <Users className="w-4 h-4 mr-1 text-gray-400" />
+                    {placement.listenerCount.toLocaleString()}
+                  </div>
+                  {placement.downloads && (
+                    <div className="text-sm text-gray-500 mt-1">
+                      {placement.downloads.toLocaleString()} downloads
+                    </div>
+                  )}
+                </TableCell>
+                
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    {placement.platformLinks.spotify && (
+                      <a 
+                        href={placement.platformLinks.spotify} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-700"
+                        title="Spotify"
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                      </a>
+                    )}
+                    {placement.platformLinks.apple && (
+                      <a 
+                        href={placement.platformLinks.apple} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-gray-700"
+                        title="Apple Podcasts"
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                      </a>
+                    )}
+                    {placement.episodeUrl && (
+                      <a 
+                        href={placement.episodeUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-primary/80"
+                        title="Episode URL"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                </TableCell>
+                
+                <TableCell>
+                  {placement.engagement && (
+                    <div className="space-y-1">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Share2 className="w-3 h-3 mr-1" />
+                        {placement.engagement.shares}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MessageSquare className="w-3 h-3 mr-1" />
+                        {placement.engagement.comments}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Eye className="w-3 h-3 mr-1" />
+                        {placement.engagement.likes}
+                      </div>
+                    </div>
+                  )}
+                  {placement.rating && (
+                    <div className="flex items-center text-sm text-yellow-600 mt-2">
+                      ⭐ {placement.rating}/5
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-function CategoryBreakdown({ bookings }: { bookings: BookingWithPodcast[] }) {
-  const categories = bookings.reduce((acc, booking) => {
-    const category = booking.podcast.category;
-    acc[category] = (acc[category] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const sortedCategories = Object.entries(categories)
-    .map(([category, count]) => ({
-      category,
-      count,
-      percentage: (count / bookings.length) * 100,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <BarChart3 className="mr-2 h-5 w-5" />
-          Top Categories
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {sortedCategories.map((item) => (
-            <div key={item.category} className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-900">{item.category}</span>
-                <span className="text-gray-600">{item.count} placements</span>
-              </div>
-              <Progress value={item.percentage} className="h-2" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function PlacementTracking() {
-  const [timeRange, setTimeRange] = useState("all");
-  const [category, setCategory] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
-  const { data: bookings, isLoading } = useQuery<BookingWithPodcast[]>({
-    queryKey: ["/api/bookings"],
+  const { data: placements = [], isLoading } = useQuery({
+    queryKey: ['/api/placements'],
   });
 
-  const filteredBookings = (bookings || []).filter((booking) => {
-    // Filter by category
-    const matchesCategory = category === "all" || booking.podcast.category === category;
-    
-    // Filter by time range
-    let matchesTimeRange = true;
-    if (timeRange !== "all" && booking.publishDate) {
-      const publishDate = new Date(booking.publishDate);
-      const now = new Date();
-      
-      switch (timeRange) {
-        case "30d":
-          matchesTimeRange = publishDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        case "90d":
-          matchesTimeRange = publishDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-          break;
-        case "1y":
-          matchesTimeRange = publishDate >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-          break;
-      }
+  // Sample data matching Airtable structure
+  const mockPlacements: PlacementRecord[] = [
+    {
+      id: 1,
+      clientName: "Phillip Swan",
+      podcastName: "AI Leadership Podcast",
+      hostName: "Sarah Chen",
+      episodeTitle: "Building Responsible AI at Scale",
+      category: "Technology",
+      recordingDate: "2024-01-15",
+      publishDate: "2024-01-22",
+      episodeUrl: "https://aileadership.com/episodes/responsible-ai",
+      status: "published",
+      listenerCount: 45000,
+      duration: "52 min",
+      platformLinks: {
+        spotify: "https://spotify.com/episode/123",
+        apple: "https://podcasts.apple.com/episode/123",
+        website: "https://aileadership.com/episodes/responsible-ai"
+      },
+      downloads: 12500,
+      engagement: {
+        shares: 234,
+        comments: 89,
+        likes: 456
+      },
+      rating: 5
+    },
+    {
+      id: 2,
+      clientName: "Phillip Swan",
+      podcastName: "Future of Work Today",
+      hostName: "Mike Rodriguez",
+      episodeTitle: "AI Transformation in Enterprise",
+      category: "Business",
+      recordingDate: "2024-01-08",
+      publishDate: "2024-01-15",
+      status: "published",
+      listenerCount: 32000,
+      duration: "38 min",
+      platformLinks: {
+        spotify: "https://spotify.com/episode/124",
+        apple: "https://podcasts.apple.com/episode/124"
+      },
+      downloads: 8900,
+      engagement: {
+        shares: 178,
+        comments: 45,
+        likes: 312
+      },
+      rating: 4
+    },
+    {
+      id: 3,
+      clientName: "John Smith",
+      podcastName: "Tech Innovators",
+      hostName: "Jessica Park",
+      episodeTitle: "Customer-Centric AI Solutions",
+      category: "Technology",
+      recordingDate: "2024-01-20",
+      publishDate: "2024-01-25",
+      status: "recorded",
+      listenerCount: 28000,
+      duration: "45 min",
+      platformLinks: {}
+    },
+    {
+      id: 4,
+      clientName: "Maria Garcia",
+      podcastName: "Startup Stories",
+      hostName: "David Kim",
+      episodeTitle: "Scaling AI in Healthcare",
+      category: "Healthcare",
+      recordingDate: "2024-01-25",
+      publishDate: "2024-02-01",
+      status: "scheduled",
+      listenerCount: 18000,
+      duration: "40 min",
+      platformLinks: {}
     }
-    
-    return matchesCategory && matchesTimeRange;
+  ];
+
+  const displayPlacements = isLoading ? [] : mockPlacements;
+
+  const filteredPlacements = displayPlacements.filter(placement => {
+    const matchesSearch = placement.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         placement.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         placement.episodeTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         placement.hostName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || placement.status === statusFilter;
+    const matchesCategory = categoryFilter === "all" || placement.category === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
-  const groupedBookings = {
-    published: filteredBookings.filter(b => b.status === "completed" && b.episodeUrl),
-    recorded: filteredBookings.filter(b => b.recordingDate && b.status !== "completed"),
-    scheduled: filteredBookings.filter(b => b.scheduledDate && !b.recordingDate),
+  const stats = {
+    total: displayPlacements.length,
+    published: displayPlacements.filter(p => p.status === 'published').length,
+    totalReach: displayPlacements.reduce((sum, p) => sum + p.listenerCount, 0),
+    averageRating: displayPlacements.filter(p => p.rating).reduce((sum, p) => sum + (p.rating || 0), 0) / displayPlacements.filter(p => p.rating).length || 0
   };
 
-  const categories = Array.from(new Set((bookings || []).map(b => b.podcast.category)));
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-32 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const categories = [...new Set(displayPlacements.map(p => p.category))];
 
   return (
-    <div className="space-y-6">
-      {bookings && bookings.length > 0 && <StatsOverview bookings={filteredBookings} />}
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-700">Placement Tracking</h1>
+          <p className="text-gray-600 mt-2">Monitor and analyze podcast appearance performance</p>
+        </div>
+        <Button className="bg-primary text-white">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Placement
+        </Button>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Placements</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <Podcast className="h-8 w-8 text-gray-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Published</p>
+                <p className="text-3xl font-bold text-green-600">{stats.published}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Reach</p>
+                <p className="text-3xl font-bold text-blue-600">{stats.totalReach.toLocaleString()}</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Avg. Rating</p>
+                <p className="text-3xl font-bold text-yellow-600">{stats.averageRating.toFixed(1)}/5</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-yellow-400" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mr-2">Time Range:</label>
-                <Select value={timeRange} onValueChange={setTimeRange}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Time</SelectItem>
-                    <SelectItem value="30d">Last 30 Days</SelectItem>
-                    <SelectItem value="90d">Last 90 Days</SelectItem>
-                    <SelectItem value="1y">Last Year</SelectItem>
-                  </SelectContent>
-                </Select>
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search clients, podcasts, episodes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
               
-              <div>
-                <label className="text-sm font-medium text-gray-700 mr-2">Category:</label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="recorded">Recorded</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="live">Live</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export Report
-            </Button>
+
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3">
-          {/* Placement Timeline */}
-          {bookings && bookings.length > 0 ? (
-            <Tabs defaultValue="published" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="published">
-                  Published ({groupedBookings.published.length})
-                </TabsTrigger>
-                <TabsTrigger value="recorded">
-                  Recorded ({groupedBookings.recorded.length})
-                </TabsTrigger>
-                <TabsTrigger value="scheduled">
-                  Scheduled ({groupedBookings.scheduled.length})
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="published" className="space-y-4 mt-6">
-                {groupedBookings.published.length > 0 ? (
-                  groupedBookings.published.map((booking) => (
-                    <PlacementCard key={booking.id} booking={booking} />
-                  ))
-                ) : (
-                  <Card>
-                    <CardContent className="p-12 text-center">
-                      <PlayCircle className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-4 text-lg font-medium text-gray-900">No published episodes</h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Episodes you've completed will appear here.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="recorded" className="space-y-4 mt-6">
-                {groupedBookings.recorded.length > 0 ? (
-                  groupedBookings.recorded.map((booking) => (
-                    <PlacementCard key={booking.id} booking={booking} />
-                  ))
-                ) : (
-                  <Card>
-                    <CardContent className="p-12 text-center">
-                      <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-4 text-lg font-medium text-gray-900">No recorded episodes</h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Episodes you've recorded but not yet published will appear here.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="scheduled" className="space-y-4 mt-6">
-                {groupedBookings.scheduled.length > 0 ? (
-                  groupedBookings.scheduled.map((booking) => (
-                    <PlacementCard key={booking.id} booking={booking} />
-                  ))
-                ) : (
-                  <Card>
-                    <CardContent className="p-12 text-center">
-                      <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-4 text-lg font-medium text-gray-900">No scheduled interviews</h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Your upcoming scheduled interviews will appear here.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <TrendingUp className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-4 text-lg font-medium text-gray-900">No placements to track yet</h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Start applying to podcasts to track your placements and performance here.
-                </p>
-                <Button className="mt-4 bg-primary text-white hover:bg-blue-700">
-                  <Podcast className="mr-2 h-4 w-4" />
-                  Discover Podcasts
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+      {/* Results */}
+      {isLoading ? (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-4 text-gray-600">Loading placement data...</p>
         </div>
+      ) : filteredPlacements.length === 0 ? (
+        <div className="text-center py-12">
+          <Podcast className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">No placements found</h3>
+          <p className="text-gray-600">Try adjusting your filters or search terms.</p>
+        </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-sm text-gray-600">
+              Showing {filteredPlacements.length} of {displayPlacements.length} placements
+            </p>
+          </div>
 
-        {/* Sidebar Analytics */}
-        <div className="space-y-6">
-          {bookings && bookings.length > 0 && <CategoryBreakdown bookings={filteredBookings} />}
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Eye className="mr-2 h-5 w-5" />
-                Quick Insights
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Most popular category:</span>
-                  <span className="font-medium">
-                    {categories.length > 0 ? categories[0] : "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Largest audience reached:</span>
-                  <span className="font-medium">
-                    {bookings && bookings.length > 0 
-                      ? (Math.max(...bookings.map(b => b.podcast.listenerCount)) / 1000).toFixed(0) + "K"
-                      : "0"
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Average response time:</span>
-                  <span className="font-medium">3-5 days</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <PlacementTable placements={filteredPlacements} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
