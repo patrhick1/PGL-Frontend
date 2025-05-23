@@ -32,7 +32,7 @@ import {
 interface PlacementRecord {
   id: number;
   podcastName: string;
-  status: 'responded' | 'interested' | 'form_submitted' | 'pending_intro_call' | 'intro_call_booked' | 'pending_podcast_booking' | 'recording_booked' | 'recording' | 'live_link' | 'paid';
+  status: 'responded' | 'interested' | 'form_submitted' | 'pending_intro_call' | 'intro_call_booked' | 'pending_podcast_booking' | 'recording_booked' | 'recorded' | 'live_link' | 'paid';
   callDate: string;
   hostName: string;
   hostEmail: string;
@@ -85,7 +85,7 @@ const statusConfig = {
     color: "bg-indigo-100 text-indigo-800",
     dotColor: "bg-indigo-500"
   },
-  recording: {
+  recorded: {
     label: "Recorded",
     icon: PlayCircle,
     color: "bg-red-100 text-red-800",
@@ -409,7 +409,7 @@ export default function PlacementTracking() {
     {
       id: 3,
       podcastName: "Tech Innovators",
-      status: "recording",
+      status: "recorded",
       callDate: "2024-01-20",
       hostName: "Jessica Park",
       hostEmail: "jessica@techinnovators.io",
@@ -509,7 +509,7 @@ export default function PlacementTracking() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Reach</p>
+                <p className="text-sm font-medium text-gray-600">Estimated Total Reach</p>
                 <p className="text-3xl font-bold text-blue-600">{stats.totalReach.toLocaleString()}</p>
               </div>
               <Users className="h-8 w-8 text-blue-400" />
