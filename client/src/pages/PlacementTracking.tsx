@@ -24,7 +24,9 @@ import {
   Edit,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Check,
+  X
 } from "lucide-react";
 
 interface PlacementRecord {
@@ -520,7 +522,7 @@ export default function PlacementTracking() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Avg. Rating</p>
-                <p className="text-3xl font-bold text-yellow-600">{stats.averageRating.toFixed(1)}/5</p>
+                <p className="text-3xl font-bold text-yellow-600">{stats.averageReach.toLocaleString()}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-yellow-400" />
             </div>
