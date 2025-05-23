@@ -385,7 +385,7 @@ export default function PitchGenerator() {
           <span className="text-blue-800 font-medium">Mock Interview Process</span>
         </div>
         <p className="text-blue-700 mt-2 text-sm">
-          Answer the questions below as if you're in a real interview. Our AI will analyze your responses to create compelling pitch angles that highlight your unique expertise and story.
+          Answer the questions below as if you're in a real interview. Our Agents will analyze your responses to create pitch angles that will highlight your unique expertise and brand story.
         </p>
       </div>
 
