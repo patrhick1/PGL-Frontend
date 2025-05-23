@@ -104,6 +104,43 @@ const statusConfig = {
 };
 
 function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
+  const [editingField, setEditingField] = useState<{id: number, field: string} | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const handleEdit = (placement: PlacementRecord, field: string) => {
+    setEditingField({ id: placement.id, field });
+    // Set current value based on field
+    switch(field) {
+      case 'callDate':
+        setEditValue(placement.callDate);
+        break;
+      case 'interviewBriefLink':
+        setEditValue(placement.interviewBriefLink || '');
+        break;
+      case 'placementReach':
+        setEditValue(placement.placementReach.toString());
+        break;
+      case 'publishDate':
+        setEditValue(placement.publishDate);
+        break;
+      case 'liveLink':
+        setEditValue(placement.liveLink || '');
+        break;
+    }
+  };
+
+  const handleSave = () => {
+    // Here you would normally save to your API
+    console.log('Saving:', editingField, editValue);
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const handleCancel = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
+
   return (
     <div className="rounded-lg border bg-white">
       <Table>
@@ -125,6 +162,7 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
             const StatusIcon = statusConfig[placement.status].icon;
             return (
               <TableRow key={placement.id} className="hover:bg-gray-50">
+                {/* Read-only: Podcast */}
                 <TableCell>
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
@@ -134,6 +172,7 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
                   </div>
                 </TableCell>
                 
+                {/* Read-only: Status */}
                 <TableCell>
                   <div className="flex items-center space-x-2">
                     <div className={`w-2 h-2 rounded-full ${statusConfig[placement.status].dotColor}`}></div>
@@ -143,16 +182,39 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
                   </div>
                 </TableCell>
                 
+                {/* Editable: Call Date */}
                 <TableCell>
-                  <div className="text-gray-900">
-                    {new Date(placement.callDate).toLocaleDateString()}
-                  </div>
+                  {editingField?.id === placement.id && editingField?.field === 'callDate' ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="date"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="text-sm w-32"
+                      />
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="text-gray-900 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'callDate')}
+                    >
+                      {new Date(placement.callDate).toLocaleDateString()}
+                    </div>
+                  )}
                 </TableCell>
                 
+                {/* Read-only: Host Name */}
                 <TableCell>
                   <div className="text-gray-900">{placement.hostName}</div>
                 </TableCell>
                 
+                {/* Read-only: Host Email */}
                 <TableCell>
                   <a 
                     href={`mailto:${placement.hostEmail}`}
@@ -162,48 +224,140 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
                   </a>
                 </TableCell>
                 
+                {/* Editable: Interview Brief */}
                 <TableCell>
-                  {placement.interviewBriefLink ? (
-                    <a 
-                      href={placement.interviewBriefLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
-                    >
-                      <ExternalLink className="w-3 h-3 mr-1" />
-                      Brief
-                    </a>
+                  {editingField?.id === placement.id && editingField?.field === 'interviewBriefLink' ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="url"
+                        placeholder="Brief link"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="text-sm w-40"
+                      />
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   ) : (
-                    <span className="text-gray-400 text-sm">Not available</span>
+                    <div 
+                      className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'interviewBriefLink')}
+                    >
+                      {placement.interviewBriefLink ? (
+                        <a 
+                          href={placement.interviewBriefLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Brief
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">Click to add</span>
+                      )}
+                    </div>
                   )}
                 </TableCell>
                 
+                {/* Editable: Placement Reach */}
                 <TableCell>
-                  <div className="flex items-center text-gray-900">
-                    <Users className="w-4 h-4 mr-1 text-gray-400" />
-                    {placement.placementReach.toLocaleString()}
-                  </div>
-                </TableCell>
-                
-                <TableCell>
-                  <div className="text-gray-900">
-                    {new Date(placement.publishDate).toLocaleDateString()}
-                  </div>
-                </TableCell>
-                
-                <TableCell>
-                  {placement.liveLink ? (
-                    <a 
-                      href={placement.liveLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
-                    >
-                      <PlayCircle className="w-3 h-3 mr-1" />
-                      Listen
-                    </a>
+                  {editingField?.id === placement.id && editingField?.field === 'placementReach' ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="text-sm w-24"
+                      />
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   ) : (
-                    <span className="text-gray-400 text-sm">Not live yet</span>
+                    <div 
+                      className="flex items-center text-gray-900 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'placementReach')}
+                    >
+                      <Users className="w-4 h-4 mr-1 text-gray-400" />
+                      {placement.placementReach.toLocaleString()}
+                    </div>
+                  )}
+                </TableCell>
+                
+                {/* Editable: Publish Date */}
+                <TableCell>
+                  {editingField?.id === placement.id && editingField?.field === 'publishDate' ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="date"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="text-sm w-32"
+                      />
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="text-gray-900 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'publishDate')}
+                    >
+                      {new Date(placement.publishDate).toLocaleDateString()}
+                    </div>
+                  )}
+                </TableCell>
+                
+                {/* Editable: Live Link */}
+                <TableCell>
+                  {editingField?.id === placement.id && editingField?.field === 'liveLink' ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="url"
+                        placeholder="Live link"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="text-sm w-40"
+                      />
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'liveLink')}
+                    >
+                      {placement.liveLink ? (
+                        <a 
+                          href={placement.liveLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-primary hover:text-primary/80 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <PlayCircle className="w-3 h-3 mr-1" />
+                          Listen
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">Click to add</span>
+                      )}
+                    </div>
                   )}
                 </TableCell>
               </TableRow>
@@ -296,23 +450,18 @@ export default function PlacementTracking() {
   const displayPlacements = isLoading ? [] : mockPlacements;
 
   const filteredPlacements = displayPlacements.filter(placement => {
-    const matchesSearch = placement.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         placement.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         placement.episodeTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = placement.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          placement.hostName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || placement.status === statusFilter;
-    const matchesCategory = categoryFilter === "all" || placement.category === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesStatus;
   });
 
   const stats = {
     total: displayPlacements.length,
     paid: displayPlacements.filter(p => p.status === 'paid').length,
-    totalReach: displayPlacements.reduce((sum, p) => sum + p.listenerCount, 0),
-    averageRating: displayPlacements.filter(p => p.rating).reduce((sum, p) => sum + (p.rating || 0), 0) / displayPlacements.filter(p => p.rating).length || 0
+    totalReach: displayPlacements.reduce((sum, p) => sum + p.placementReach, 0),
+    averageReach: displayPlacements.length > 0 ? displayPlacements.reduce((sum, p) => sum + p.placementReach, 0) / displayPlacements.length : 0
   };
-
-  const categories = Array.from(new Set(displayPlacements.map(p => p.category)));
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
