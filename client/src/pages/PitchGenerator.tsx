@@ -412,50 +412,6 @@ export default function AnglesGenerator() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {/* Client Bio */}
-          <div>
-            <div className="flex items-center space-x-2 mb-6">
-              <Brain className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold text-gray-800">Client Bio</h2>
-              <Badge variant="destructive">Required</Badge>
-            </div>
-            <p className="text-gray-600 text-sm mb-6">
-              Provide your current professional bio. This establishes context and credibility for angle generation.
-            </p>
-            
-            <FormField
-              control={form.control}
-              name="clientBio"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <Card className="hover:shadow-sm transition-all">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center space-x-2">
-                        <Target className="h-5 w-5 text-primary" />
-                        <h3 className="font-medium text-gray-900">Professional Bio</h3>
-                        <Badge variant="destructive" className="text-xs">Foundation Context</Badge>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Include your current role, company, key achievements, and expertise areas. This forms the foundation for all angle generation.
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="Example: Phillip Swan is a technology leader and entrepreneur focused on helping Fortune 500 companies responsibly leverage AI. As co-founder of The AI Solution Group, he specializes in delivering safe and innovative AI solutions for industries like manufacturing, financial services, and healthcare. With a background spanning engineering, product management, and executive leadership..."
-                          className={`min-h-[120px] ${fieldState.error ? 'border-red-500' : ''}`}
-                        />
-                      </FormControl>
-                      {fieldState.error && (
-                        <p className="text-sm text-red-500 mt-2">{fieldState.error.message}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </FormItem>
-              )}
-            />
-          </div>
 
           {/* Required Questions */}
           <div>

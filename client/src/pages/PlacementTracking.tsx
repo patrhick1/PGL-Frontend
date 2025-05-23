@@ -571,9 +571,11 @@ export default function PlacementTracking() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>{category}</SelectItem>
-                  ))}
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="technology">Technology</SelectItem>
+                  <SelectItem value="marketing">Marketing</SelectItem>
+                  <SelectItem value="health">Health</SelectItem>
+                  <SelectItem value="finance">Finance</SelectItem>
                 </SelectContent>
               </Select>
             </div>
