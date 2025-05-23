@@ -174,14 +174,45 @@ function PlacementTable({ placements }: { placements: PlacementRecord[] }) {
                   </div>
                 </TableCell>
                 
-                {/* Read-only: Status */}
+                {/* Editable: Status */}
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${statusConfig[placement.status].dotColor}`}></div>
-                    <Badge className={statusConfig[placement.status].color}>
-                      {statusConfig[placement.status].label}
-                    </Badge>
-                  </div>
+                  {editingField?.id === placement.id && editingField?.field === 'status' ? (
+                    <div className="flex items-center space-x-2">
+                      <Select value={editValue} onValueChange={setEditValue}>
+                        <SelectTrigger className="w-40 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="responded">Responded</SelectItem>
+                          <SelectItem value="interested">Interested</SelectItem>
+                          <SelectItem value="form_submitted">Form Submitted</SelectItem>
+                          <SelectItem value="pending_intro_call">Pending Intro Call</SelectItem>
+                          <SelectItem value="intro_call_booked">Intro Call Booked</SelectItem>
+                          <SelectItem value="pending_podcast_booking">Pending Podcast Booking</SelectItem>
+                          <SelectItem value="recording_booked">Recording Booked</SelectItem>
+                          <SelectItem value="recording">Recording</SelectItem>
+                          <SelectItem value="live_link">Live Link</SelectItem>
+                          <SelectItem value="paid">Paid</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0">
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      onClick={() => handleEdit(placement, 'status')}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${statusConfig[placement.status].dotColor}`}></div>
+                      <Badge className={statusConfig[placement.status].color}>
+                        {statusConfig[placement.status].label}
+                      </Badge>
+                    </div>
+                  )}
                 </TableCell>
                 
                 {/* Editable: Call Date */}
