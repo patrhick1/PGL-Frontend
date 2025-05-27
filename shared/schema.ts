@@ -44,6 +44,7 @@ export const podcasts = pgTable("media", {
   id: serial("media_id").primaryKey(),
   name: text("name"),
   title: text("title"),
+  status: text("status").default("active"),
   rssUrl: text("rss_url"),
   rssFeedUrl: text("rss_feed_url"),
   website: text("website"),
@@ -76,6 +77,7 @@ export const podcasts = pgTable("media", {
   fetchedEpisodes: boolean("fetched_episodes").default(false),
   sourceApi: text("source_api"), // "ListenNotes", "PodscanFM", "Mixed"
   apiId: text("api_id"),
+  listenerCount: integer("listener_count"),
   
   // Dates
   lastPostedAt: timestamp("last_posted_at"),
@@ -155,6 +157,7 @@ export const campaigns = pgTable("campaigns", {
   endDate: date("end_date"),
   goalNote: text("goal_note"),
   mediaKitUrl: text("media_kit_url"),
+  status: text("status").default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

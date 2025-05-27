@@ -103,7 +103,7 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    return await query.orderBy(desc(podcasts.listenerCount));
+    return await query.orderBy(desc(podcasts.audienceSize));
   }
 
   async getPodcast(id: number): Promise<Podcast | undefined> {
