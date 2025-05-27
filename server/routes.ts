@@ -242,8 +242,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin authentication middleware
+  const isAdmin = (req: any, res: any, next: any) => {
+    const adminEmails = [
+      "martin@modernindustrial.com",
+      "martin@modernindus.com"
+    ];
+    
+    if (!req.isAuthenticated() || !req.user?.claims?.email) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    if (!adminEmails.includes(req.user.claims.email)) {
+      return res.status(403).json({ 
+        message: "Access denied. Administrator privileges required." 
+      });
+    }
+    
+    next();
+  };
+
   // Admin routes for client management
-  app.get('/api/admin/clients', isAuthenticated, async (req, res) => {
+  app.get('/api/admin/clients', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const clients = await storage.getAllClients();
       res.json(clients);
@@ -253,7 +273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/clients', isAuthenticated, async (req, res) => {
+  app.post('/api/admin/clients', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const clientData = req.body;
       const client = await storage.createClient(clientData);
@@ -264,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/clients/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/admin/clients/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteClient(id);

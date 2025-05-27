@@ -13,6 +13,7 @@ import {
   Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
@@ -31,6 +32,13 @@ const accountNavigation = [
 
 export default function Sidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  
+  // Check if current user is an admin
+  const isAdmin = user?.email && [
+    "martin@modernindustrial.com", 
+    "martin@modernindus.com"
+  ].includes(user.email);
 
   return (
     <aside className="w-64 bg-white shadow-lg border-r border-gray-200">
