@@ -242,6 +242,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes for client management
+  app.get('/api/admin/clients', isAuthenticated, async (req, res) => {
+    try {
+      const clients = await storage.getAllClients();
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
+  app.post('/api/admin/clients', isAuthenticated, async (req, res) => {
+    try {
+      const clientData = req.body;
+      const client = await storage.createClient(clientData);
+      res.json(client);
+    } catch (error) {
+      console.error("Error creating client:", error);
+      res.status(500).json({ message: "Failed to create client" });
+    }
+  });
+
+  app.delete('/api/admin/clients/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteClient(id);
+      res.json({ message: "Client deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      res.status(500).json({ message: "Failed to delete client" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

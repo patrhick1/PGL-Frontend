@@ -9,7 +9,8 @@ import {
   TrendingUp, 
   Settings, 
   LogOut,
-  Mic
+  Mic,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Angle Generator", href: "/angle-generator", icon: Lightbulb },
   { name: "Approvals", href: "/approvals", icon: CheckCircle },
   { name: "Placement Tracking", href: "/placement-tracking", icon: TrendingUp },
+  { name: "Admin Panel", href: "/admin", icon: Shield },
 ];
 
 const accountNavigation = [

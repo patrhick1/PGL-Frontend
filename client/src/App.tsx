@@ -15,6 +15,7 @@ import PitchGenerator from "@/pages/PitchGenerator";
 import Approvals from "@/pages/Approvals";
 import PlacementTracking from "@/pages/PlacementTracking";
 import Settings from "@/pages/Settings";
+import AdminPanel from "@/pages/AdminPanel";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -40,6 +41,7 @@ function Router() {
           <Route path="/angle-generator" component={PitchGenerator} />
           <Route path="/approvals" component={Approvals} />
           <Route path="/placement-tracking" component={PlacementTracking} />
+          <Route path="/admin" component={AdminPanel} />
           <Route path="/settings" component={Settings} />
         </Layout>
       )}

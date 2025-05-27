@@ -60,6 +60,11 @@ export interface IStorage {
     pendingReview: number;
     successRate: number;
   }>;
+
+  // Admin client management
+  getAllClients(): Promise<User[]>;
+  createClient(clientData: any): Promise<User>;
+  deleteClient(clientId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
