@@ -336,61 +336,9 @@ export default function Approvals() {
     queryKey: ['/api/podcast-opportunities'],
   });
 
-  // Mock data for demonstration - replace with actual API call
-  const mockOpportunities: PodcastOpportunity[] = [
-    {
-      id: 1,
-      podcastName: "The AI Leadership Podcast",
-      hostName: "Sarah Chen",
-      category: "Technology",
-      listenerCount: 45000,
-      episodeTitle: "Building Responsible AI at Scale",
-      episodeDescription: "Deep dive into implementing AI governance frameworks that enable innovation while managing risk. Perfect fit for enterprise AI leaders.",
-      publishDate: "2024-01-15",
-      duration: "52 min",
-      podcastWebsite: "https://aileadership.com",
-      contactEmail: "sarah@aileadership.com",
-      relevanceScore: 94,
-      source: "podscan",
-      status: "pending",
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 2,
-      podcastName: "Future of Work Today",
-      hostName: "Mike Rodriguez",
-      category: "Business",
-      listenerCount: 32000,
-      episodeTitle: "AI Transformation in Enterprise",
-      episodeDescription: "How Fortune 500 companies are successfully implementing AI solutions and overcoming common implementation challenges.",
-      publishDate: "2024-01-12",
-      duration: "38 min",
-      podcastWebsite: "https://futureofworktoday.com",
-      relevanceScore: 89,
-      source: "listennotes",
-      status: "pending",
-      createdAt: "2024-01-08"
-    },
-    {
-      id: 3,
-      podcastName: "Tech Innovators",
-      hostName: "Jessica Park",
-      category: "Technology",
-      listenerCount: 28000,
-      episodeTitle: "Customer-Centric AI Solutions",
-      episodeDescription: "Exploring how AI can enhance customer experiences while maintaining ethical standards and data privacy.",
-      publishDate: "2024-01-18",
-      duration: "45 min",
-      relevanceScore: 87,
-      source: "podscan",
-      status: "approved",
-      createdAt: "2024-01-12"
-    }
-  ];
 
-  const displayOpportunities = isLoading ? [] : mockOpportunities;
 
-  const filteredOpportunities = displayOpportunities.filter(opportunity => {
+  const filteredOpportunities = opportunities.filter((opportunity: PodcastOpportunity) => {
     const matchesSearch = opportunity.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          opportunity.hostName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          opportunity.episodeTitle.toLowerCase().includes(searchTerm.toLowerCase());
@@ -400,10 +348,10 @@ export default function Approvals() {
   });
 
   const stats = {
-    total: displayOpportunities.length,
-    pending: displayOpportunities.filter(o => o.status === 'pending').length,
-    approved: displayOpportunities.filter(o => o.status === 'approved').length,
-    rejected: displayOpportunities.filter(o => o.status === 'rejected').length
+    total: filteredOpportunities.length,
+    pending: filteredOpportunities.filter((o: PodcastOpportunity) => o.status === 'pending').length,
+    approved: filteredOpportunities.filter((o: PodcastOpportunity) => o.status === 'approved').length,
+    rejected: filteredOpportunities.filter((o: PodcastOpportunity) => o.status === 'rejected').length
   };
 
   return (
