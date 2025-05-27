@@ -242,20 +242,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin authentication middleware
+  // Admin authentication middleware - restricted to internal team only
   const isAdmin = (req: any, res: any, next: any) => {
-    const adminEmails = [
-      "martin@modernindustrial.com",
-      "martin@modernindus.com"
-    ];
-    
     if (!req.isAuthenticated() || !req.user?.claims?.email) {
       return res.status(401).json({ message: "Authentication required" });
     }
     
-    if (!adminEmails.includes(req.user.claims.email)) {
+    const userEmail = req.user.claims.email.toLowerCase();
+    
+    // Internal team email addresses
+    const adminEmails = [
+      "martin@podcastguestlaunch.com",
+      "martin@modernindustrialists.com"
+    ];
+    
+    // Check if user has podcastguestlaunch.com domain or is specifically authorized
+    const isPGLDomain = userEmail.endsWith("@podcastguestlaunch.com");
+    const isAuthorizedUser = adminEmails.includes(userEmail);
+    
+    if (!isPGLDomain && !isAuthorizedUser) {
       return res.status(403).json({ 
-        message: "Access denied. Administrator privileges required." 
+        message: "Access denied. Internal team access only." 
       });
     }
     
