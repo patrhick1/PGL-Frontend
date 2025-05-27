@@ -51,7 +51,7 @@ export interface IStorage {
   // Campaign operations
   getUserCampaigns(userId: string): Promise<Campaign[]>;
   createCampaign(campaign: InsertCampaign): Promise<Campaign>;
-  updateCampaign(id: number, campaign: Partial<InsertCampaign>): Promise<Campaign>;
+  updateCampaign(id: string, campaign: Partial<InsertCampaign>): Promise<Campaign>;
 
   // Dashboard stats
   getUserStats(userId: string): Promise<{
@@ -102,8 +102,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     return await db.select().from(podcasts)
-      .where(and(...whereConditions))
-      .orderBy(desc(podcasts.audienceSize));
+      .where(and(...whereConditions));
   }
 
   async getPodcast(id: number): Promise<Podcast | undefined> {

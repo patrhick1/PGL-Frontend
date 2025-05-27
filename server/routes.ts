@@ -230,6 +230,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Podcast Discovery routes
+  app.get('/api/discovery/search', isAuthenticated, async (req: any, res) => {
+    try {
+      const { query, category, language, minAudienceSize } = req.query;
+      
+      // For now, return structure ready for external API integration
+      // This will connect to ListenNotes and Podscan APIs when you provide keys
+      const searchResults = [
+        {
+          id: `discovery-${Date.now()}`,
+          name: `${query} Related Podcast`,
+          description: `A podcast focused on ${query} topics`,
+          category: category || 'Business',
+          hostName: 'Host Name',
+          website: 'https://example.com',
+          language: language || 'en',
+          relevanceScore: 0.85,
+          source: 'listennotes',
+          audienceSize: parseInt(minAudienceSize) || 5000
+        }
+      ];
+      
+      res.json(searchResults);
+    } catch (error) {
+      console.error("Error in podcast discovery:", error);
+      res.status(500).json({ message: "Discovery search failed" });
+    }
+  });
+
   // Dashboard stats
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
