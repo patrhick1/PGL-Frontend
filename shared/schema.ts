@@ -37,18 +37,56 @@ export const users = pgTable("users", {
 });
 
 // Podcasts table
-export const podcasts = pgTable("podcasts", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  host: text("host").notNull(),
-  category: text("category").notNull(),
-  coverImageUrl: text("cover_image_url"),
-  listenerCount: integer("listener_count").default(0),
+// PGL Media/Podcast table - matches your PGL backend system
+export const podcasts = pgTable("media", {
+  id: serial("media_id").primaryKey(),
+  name: text("name"),
+  title: text("title"),
+  rssUrl: text("rss_url"),
+  rssFeedUrl: text("rss_feed_url"),
   website: text("website"),
+  description: text("description"),
+  aiDescription: text("ai_description"),
   contactEmail: text("contact_email"),
-  averageRating: real("average_rating").default(0),
-  status: text("status").default("active"), // active, inactive, pending
+  language: text("language"),
+  category: text("category"),
+  imageUrl: text("image_url"),
+  
+  // Company and stats
+  companyId: integer("company_id"),
+  avgDownloads: integer("avg_downloads"),
+  audienceSize: integer("audience_size"),
+  totalEpisodes: integer("total_episodes"),
+  
+  // Platform IDs
+  itunesId: text("itunes_id"),
+  spotifyId: text("podcast_spotify_id"),
+  
+  // Ratings and scores
+  listenScore: real("listen_score"),
+  listenScoreGlobalRank: integer("listen_score_global_rank"),
+  itunesRatingAverage: real("itunes_rating_average"),
+  itunesRatingCount: integer("itunes_rating_count"),
+  spotifyRatingAverage: real("spotify_rating_average"),
+  spotifyRatingCount: integer("spotify_rating_count"),
+  
+  // Status fields
+  fetchedEpisodes: boolean("fetched_episodes").default(false),
+  sourceApi: text("source_api"), // "ListenNotes", "PodscanFM", "Mixed"
+  apiId: text("api_id"),
+  
+  // Dates
+  lastPostedAt: timestamp("last_posted_at"),
+  
+  // Social media links
+  twitterUrl: text("podcast_twitter_url"),
+  linkedinUrl: text("podcast_linkedin_url"),
+  instagramUrl: text("podcast_instagram_url"),
+  facebookUrl: text("podcast_facebook_url"),
+  youtubeUrl: text("podcast_youtube_url"),
+  tiktokUrl: text("podcast_tiktok_url"),
+  otherSocialUrl: text("podcast_other_social_url"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -97,20 +135,40 @@ export const mediaKits = pgTable("media_kits", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Campaign tracking
+// PGL Campaigns table - matches your PGL backend system
 export const campaigns = pgTable("campaigns", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  targetAudience: text("target_audience"),
-  goals: text("goals").array(),
-  budget: integer("budget"),
-  startDate: timestamp("start_date"),
-  endDate: timestamp("end_date"),
-  status: text("status").default("active"), // active, completed, paused
+  id: uuid("campaign_id").primaryKey(),
+  personId: integer("person_id").notNull().references(() => users.id),
+  attioClientId: uuid("attio_client_id"),
+  campaignName: text("campaign_name").notNull(),
+  campaignType: text("campaign_type"),
+  campaignBio: text("campaign_bio"), // Link to GDoc or text
+  campaignAngles: text("campaign_angles"), // Link to GDoc or text
+  campaignKeywords: text("campaign_keywords").array(), // TEXT[] array
+  compiledSocialPosts: text("compiled_social_posts"), // Link to GDoc or text
+  podcastTranscriptLink: text("podcast_transcript_link"), // Link to GDoc
+  compiledArticlesLink: text("compiled_articles_link"), // Link to GDoc
+  mockInterviewTranscript: text("mock_interview_transcript"), // Link to GDoc or text
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  goalNote: text("goal_note"),
+  mediaKitUrl: text("media_kit_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// PGL Match Suggestions table - podcast discovery matches
+export const matchSuggestions = pgTable("match_suggestions", {
+  id: serial("match_id").primaryKey(),
+  campaignId: uuid("campaign_id").notNull().references(() => campaigns.id),
+  mediaId: integer("media_id").notNull().references(() => podcasts.id),
+  matchScore: real("match_score"),
+  matchedKeywords: text("matched_keywords").array(), // TEXT[] array
+  aiReasoning: text("ai_reasoning"),
+  status: text("status").default("pending"), // pending, approved, rejected
+  clientApproved: boolean("client_approved").default(false),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
