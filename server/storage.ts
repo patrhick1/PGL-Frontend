@@ -291,6 +291,30 @@ export class DatabaseStorage implements IStorage {
       successRate,
     };
   }
+
+  // Admin client management
+  async getAllClients(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.createdAt);
+  }
+
+  async createClient(clientData: any): Promise<User> {
+    const userData = {
+      id: `client_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      email: clientData.email,
+      firstName: clientData.firstName,
+      lastName: clientData.lastName,
+      profileImageUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const [user] = await db.insert(users).values(userData).returning();
+    return user;
+  }
+
+  async deleteClient(clientId: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, clientId));
+  }
 }
 
 export const storage = new DatabaseStorage();
