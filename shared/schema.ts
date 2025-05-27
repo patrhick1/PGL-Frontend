@@ -9,6 +9,8 @@ import {
   integer,
   boolean,
   real,
+  uuid,
+  date,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -138,7 +140,7 @@ export const mediaKits = pgTable("media_kits", {
 // PGL Campaigns table - matches your PGL backend system
 export const campaigns = pgTable("campaigns", {
   id: uuid("campaign_id").primaryKey(),
-  personId: integer("person_id").notNull().references(() => users.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
   attioClientId: uuid("attio_client_id"),
   campaignName: text("campaign_name").notNull(),
   campaignType: text("campaign_type"),
@@ -208,11 +210,12 @@ export const mediaKitsRelations = relations(mediaKits, ({ one }) => ({
   }),
 }));
 
-export const campaignsRelations = relations(campaigns, ({ one }) => ({
+export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
   user: one(users, {
     fields: [campaigns.userId],
     references: [users.id],
   }),
+  matchSuggestions: many(matchSuggestions),
 }));
 
 // Insert schemas
