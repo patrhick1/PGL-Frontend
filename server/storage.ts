@@ -91,19 +91,19 @@ export class DatabaseStorage implements IStorage {
 
   // Podcast operations
   async getPodcasts(filters?: { category?: string; search?: string }): Promise<Podcast[]> {
-    let query = db.select().from(podcasts).where(eq(podcasts.status, "active"));
+    let whereConditions = [eq(podcasts.status, "active")];
 
     if (filters?.category) {
-      query = query.where(eq(podcasts.category, filters.category));
+      whereConditions.push(eq(podcasts.category, filters.category));
     }
 
     if (filters?.search) {
-      query = query.where(
-        ilike(podcasts.name, `%${filters.search}%`)
-      );
+      whereConditions.push(ilike(podcasts.name, `%${filters.search}%`));
     }
 
-    return await query.orderBy(desc(podcasts.audienceSize));
+    return await db.select().from(podcasts)
+      .where(and(...whereConditions))
+      .orderBy(desc(podcasts.audienceSize));
   }
 
   async getPodcast(id: number): Promise<Podcast | undefined> {
@@ -236,11 +236,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
-    const [newCampaign] = await db.insert(campaigns).values(campaign).returning();
+    const campaignData = {
+      ...campaign,
+      id: crypto.randomUUID()
+    };
+    const [newCampaign] = await db.insert(campaigns).values(campaignData).returning();
     return newCampaign;
   }
 
-  async updateCampaign(id: number, campaign: Partial<InsertCampaign>): Promise<Campaign> {
+  async updateCampaign(id: string, campaign: Partial<InsertCampaign>): Promise<Campaign> {
     const [updatedCampaign] = await db
       .update(campaigns)
       .set({ ...campaign, updatedAt: new Date() })

@@ -1,0 +1,136 @@
+Podcast Outreach System: Features and Purposes
+1. Client & Campaign Onboarding
+
+Purpose: Streamline initial client setup and campaign creation
+Key Features:
+
+Client profile creation
+Campaign goal and keyword definition
+AI-powered bio and talking angles generation
+Automated documentation storage
+
+
+
+2. Podcast Discovery & Matching
+
+Purpose: Find and qualify relevant podcasts for client outreach
+Key Features:
+
+Multi-source podcast database search (ListenNotes, Podscan)
+Automated podcast record creation
+Media enrichment with additional podcast details
+Quality scoring of potential podcast matches
+Systematic match suggestion generation
+
+
+
+3. Podcast Episode Management
+
+Purpose: Gather and analyze podcast content for targeted outreach
+Key Features:
+
+Automatic episode synchronization from RSS feeds
+Episode transcription
+AI-generated episode summaries
+Pruning of old episodes
+Detailed episode metadata tracking
+
+
+
+4. Pitch Generation
+
+Purpose: Create personalized, high-quality podcast pitch emails
+Key Features:
+
+AI-powered pitch draft generation
+Personalization using client and podcast information
+Pitch review and approval workflow
+Integration with email sending platforms (Instantly.ai)
+
+
+
+5. Outreach Tracking
+
+Purpose: Monitor and manage the podcast placement process
+Key Features:
+
+Email send tracking
+Response monitoring
+Webhook processing for email events
+Placement status tracking
+Meeting and recording date logging
+
+
+
+6. Reporting & Analytics
+
+Purpose: Provide insights and track system performance
+Key Features:
+
+AI usage reporting
+Campaign performance metrics
+Cost tracking for AI services
+Automated report generation to Google Sheets
+
+
+
+7. Authentication & Access Control
+
+Purpose: Ensure secure, role-based system access
+Key Features:
+
+Staff/Admin authentication
+Client dashboard authentication
+Role-based access control
+Session management
+Secure API endpoint protection
+
+
+
+8. Team Management Dashboard
+
+Purpose: Provide comprehensive system oversight
+Key Features:
+
+Campaign management
+Media (podcast) management
+Match and pitch review interfaces
+Background task monitoring
+Detailed reporting views
+
+
+
+9. Client Dashboard
+
+Purpose: Provide clients with campaign visibility and limited interaction
+Key Features:
+
+Campaign overview
+Match suggestion review
+Pitch approval
+Progress tracking
+Secure, filtered data access
+
+
+
+10. Background Processing
+
+Purpose: Automate complex, time-consuming tasks
+Key Features:
+
+Podcast enrichment pipeline
+Episode synchronization
+Transcription processing
+Automated task scheduling
+Webhook and external API integration
+
+
+
+Technology Stack Highlights
+
+Backend: FastAPI
+Database: PostgreSQL
+AI Integration: Multiple AI models for generation and analysis
+External Integrations: ListenNotes, Podscan, Instantly.ai, Attio CRM
+Frontend: Flexible (React, Vue.js, etc.)
+Authentication: Session-based with role management

@@ -41,7 +41,7 @@ export const users = pgTable("users", {
 // Podcasts table
 // PGL Media/Podcast table - matches your PGL backend system
 export const podcasts = pgTable("podcasts", {
-  id: serial("media_id").primaryKey(),
+  id: serial("id").primaryKey(),
   name: text("name"),
   title: text("title"),
   status: text("status").default("active"),
@@ -141,7 +141,7 @@ export const mediaKits = pgTable("media_kits", {
 
 // PGL Campaigns table - matches your PGL backend system
 export const campaigns = pgTable("campaigns", {
-  id: uuid("campaign_id").primaryKey(),
+  id: uuid("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   attioClientId: uuid("attio_client_id"),
   campaignName: text("campaign_name").notNull(),
