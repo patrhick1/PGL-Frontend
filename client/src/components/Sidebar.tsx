@@ -18,9 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 const navigation = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
   { name: "Discover Podcasts", href: "/discover", icon: Search },
-  // { name: "Questionnaire", href: "/questionnaire", icon: ClipboardList },
-  { name: "Media Kit", href: "/media-kit", icon: FolderOpen },
-  { name: "Angle Generator", href: "/angle-generator", icon: Lightbulb },
+  { name: "Content Creator", href: "/content-creator", icon: Mic },
   { name: "Approvals", href: "/approvals", icon: CheckCircle },
   { name: "Placement Tracking", href: "/placement-tracking", icon: TrendingUp },
   { name: "Admin Panel", href: "/admin", icon: Shield },
