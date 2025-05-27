@@ -15,7 +15,6 @@ export const seedMockData = async () => {
     const mockPodcasts = await db.insert(podcasts).values([
       {
         name: "The Tim Ferriss Show",
-        title: "The Tim Ferriss Show",
         description: "Tim Ferriss interviews world-class performers from eclectic areas",
         category: "Business",
         status: "active",
@@ -29,7 +28,6 @@ export const seedMockData = async () => {
       },
       {
         name: "How I Built This",
-        title: "How I Built This with Guy Raz",
         description: "Guy Raz interviews entrepreneurs about how they built their companies",
         category: "Business",
         status: "active",
@@ -43,7 +41,6 @@ export const seedMockData = async () => {
       },
       {
         name: "Masters of Scale",
-        title: "Masters of Scale with Reid Hoffman",
         description: "Reid Hoffman shows how companies grow from zero to a gazillion",
         category: "Business",
         status: "active",

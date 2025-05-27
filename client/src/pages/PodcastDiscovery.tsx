@@ -91,7 +91,7 @@ export default function PodcastDiscovery() {
   };
 
   return (
-
+    <div className="space-y-6 p-6">
       {/* Search Filters */}
       <Card>
         <CardHeader>
