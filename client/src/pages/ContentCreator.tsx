@@ -593,7 +593,7 @@ function AngleGeneratorSection() {
 
 export default function ContentCreator() {
   return (
-
+    <div>
       <Tabs defaultValue="media-kit" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="media-kit" className="flex items-center gap-2">
