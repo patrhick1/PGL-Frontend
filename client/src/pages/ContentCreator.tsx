@@ -593,13 +593,6 @@ function AngleGeneratorSection() {
 
 export default function ContentCreator() {
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Content Creator</h1>
-        <p className="mt-2 text-gray-600">
-          Create professional media kits and generate compelling pitch angles for podcast outreach
-        </p>
-      </div>
 
       <Tabs defaultValue="media-kit" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
