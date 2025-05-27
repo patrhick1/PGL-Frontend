@@ -40,7 +40,7 @@ export const users = pgTable("users", {
 
 // Podcasts table
 // PGL Media/Podcast table - matches your PGL backend system
-export const podcasts = pgTable("media", {
+export const podcasts = pgTable("podcasts", {
   id: serial("media_id").primaryKey(),
   name: text("name"),
   title: text("title"),
