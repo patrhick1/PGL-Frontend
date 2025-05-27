@@ -91,13 +91,6 @@ export default function PodcastDiscovery() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-[#A553EA]">Podcast Discovery</h1>
-          <p className="text-gray-600 mt-2">Find and qualify relevant podcasts for client outreach</p>
-        </div>
-      </div>
 
       {/* Search Filters */}
       <Card>
