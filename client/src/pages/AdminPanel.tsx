@@ -91,10 +91,20 @@ function CreateClientDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const createClientMutation = useMutation({
     mutationFn: async (data: CreateClientFormData) => {
-      return await apiRequest("/api/admin/clients", {
+      const response = await fetch("/api/admin/clients", {
         method: "POST",
-        body: data
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create client");
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -343,9 +353,19 @@ function ClientTable({ clients }: { clients: ClientAccount[] }) {
 
   const deleteClientMutation = useMutation({
     mutationFn: async (clientId: string) => {
-      return await apiRequest(`/api/admin/clients/${clientId}`, {
-        method: "DELETE"
+      const response = await fetch(`/api/admin/clients/${clientId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete client");
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -445,7 +465,7 @@ function ClientTable({ clients }: { clients: ClientAccount[] }) {
 export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: clients = [], isLoading } = useQuery({
+  const { data: clients = [], isLoading } = useQuery<ClientAccount[]>({
     queryKey: ["/api/admin/clients"],
     retry: false
   });
