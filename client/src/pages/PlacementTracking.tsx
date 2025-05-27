@@ -411,78 +411,9 @@ export default function PlacementTracking() {
     queryKey: ['/api/placements'],
   });
 
-  // Sample data for client placement tracking
-  const mockPlacements: PlacementRecord[] = [
-    {
-      id: 1,
-      podcastName: "AI Leadership Podcast",
-      status: "paid",
-      callDate: "2024-01-15",
-      hostName: "Sarah Chen",
-      hostEmail: "sarah@aileadership.com",
-      interviewBriefLink: "https://docs.google.com/document/d/abc123",
-      placementReach: 45000,
-      publishDate: "2024-01-22",
-      liveLink: "https://aileadership.com/episodes/responsible-ai"
-    },
-    {
-      id: 2,
-      podcastName: "Future of Work Today",
-      status: "live_link",
-      callDate: "2024-01-08",
-      hostName: "Mike Rodriguez",
-      hostEmail: "mike@futureofwork.com",
-      interviewBriefLink: "https://docs.google.com/document/d/def456",
-      placementReach: 32000,
-      publishDate: "2024-01-15",
-      liveLink: "https://futureofwork.com/episodes/ai-transformation"
-    },
-    {
-      id: 3,
-      podcastName: "Tech Innovators",
-      status: "recorded",
-      callDate: "2024-01-20",
-      hostName: "Jessica Park",
-      hostEmail: "jessica@techinnovators.io",
-      interviewBriefLink: "https://docs.google.com/document/d/ghi789",
-      placementReach: 28000,
-      publishDate: "2024-01-25"
-    },
-    {
-      id: 4,
-      podcastName: "Startup Stories",
-      status: "recording_booked",
-      callDate: "2024-01-25",
-      hostName: "David Kim",
-      hostEmail: "david@startupstories.com",
-      placementReach: 18000,
-      publishDate: "2024-02-01"
-    },
-    {
-      id: 5,
-      podcastName: "Business Growth Show",
-      status: "intro_call_booked",
-      callDate: "2024-01-30",
-      hostName: "Jennifer Lopez",
-      hostEmail: "jen@businessgrowth.com",
-      placementReach: 25000,
-      publishDate: "2024-02-05"
-    },
-    {
-      id: 6,
-      podcastName: "Marketing Minds",
-      status: "form_submitted",
-      callDate: "2024-02-02",
-      hostName: "Tom Wilson",
-      hostEmail: "tom@marketingminds.net",
-      placementReach: 15000,
-      publishDate: "2024-02-08"
-    }
-  ];
 
-  const displayPlacements = isLoading ? [] : mockPlacements;
 
-  const filteredPlacements = displayPlacements.filter(placement => {
+  const filteredPlacements = placements.filter((placement: PlacementRecord) => {
     const matchesSearch = placement.podcastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          placement.hostName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || placement.status === statusFilter;
@@ -490,10 +421,10 @@ export default function PlacementTracking() {
   });
 
   const stats = {
-    total: displayPlacements.length,
-    paid: displayPlacements.filter(p => p.status === 'paid').length,
-    totalReach: displayPlacements.reduce((sum, p) => sum + p.placementReach, 0),
-    averageReach: displayPlacements.length > 0 ? displayPlacements.reduce((sum, p) => sum + p.placementReach, 0) / displayPlacements.length : 0
+    total: filteredPlacements.length,
+    paid: filteredPlacements.filter((p: PlacementRecord) => p.status === 'paid').length,
+    totalReach: filteredPlacements.reduce((sum: number, p: PlacementRecord) => sum + p.placementReach, 0),
+    averageReach: filteredPlacements.length > 0 ? filteredPlacements.reduce((sum: number, p: PlacementRecord) => sum + p.placementReach, 0) / filteredPlacements.length : 0
   };
 
   return (
