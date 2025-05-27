@@ -10,8 +10,7 @@ import {
   Settings, 
   LogOut,
   Mic,
-  Shield,
-  Cpu
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +21,6 @@ const navigation = [
   { name: "Content Creator", href: "/content-creator", icon: Mic },
   { name: "Approvals", href: "/approvals", icon: CheckCircle },
   { name: "Placement Tracking", href: "/placement-tracking", icon: TrendingUp },
-  { name: "Backend Features", href: "/backend-features", icon: Cpu },
   { name: "Admin Panel", href: "/admin", icon: Shield },
 ];
 
