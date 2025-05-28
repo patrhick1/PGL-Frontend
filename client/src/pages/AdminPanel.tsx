@@ -1,131 +1,129 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+// client/src/pages/AdminPanel.tsx
+import { useState, useEffect } from "react"; // Added useEffect
+import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query"; // Renamed import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; // Keep Textarea
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog"; // Added DialogFooter, DialogClose
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient"; // Renamed import
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Users, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Mail, 
-  Building, 
-  Target,
-  Calendar,
-  UserPlus,
-  Search
+  Users, Plus, Edit, Trash2, Mail, Building, Target, Calendar, UserPlus, Search, Briefcase, LinkIcon, Info
 } from "lucide-react";
 
-// Schema for creating new clients
-const createClientSchema = z.object({
+// --- Person Schemas (Align with backend: podcast_outreach/api/schemas/person_schemas.py) ---
+const personCreateSchema = z.object({
+  full_name: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email address"),
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  companyName: z.string().min(1, "Company name is required"),
-  title: z.string().min(1, "Job title is required"),
-  placementGoalNumber: z.number().min(1, "Must be at least 1"),
-  goal: z.string().min(10, "Goal must be at least 10 characters"),
-  socialLinks: z.object({
-    linkedin: z.string().url().optional().or(z.literal("")),
-    twitter: z.string().url().optional().or(z.literal("")),
-    website: z.string().url().optional().or(z.literal(""))
-  }).optional(),
-  notes: z.string().optional()
+  role: z.string().min(1, "Role is required (e.g., client, host)"),
+  // dashboard_username and dashboard_password_hash are usually set via specific auth flows or backend logic
+  // For simplicity, we might omit them here or make them optional if admin sets them.
+  // For now, let's make them optional.
+  dashboard_username: z.string().optional(),
+  // Password should be handled securely, ideally via a "set password" endpoint after creation.
+  // Do not send plain passwords if dashboard_password_hash is expected.
+  // For this example, let's assume password is set separately.
+  linkedin_profile_url: z.string().url().optional().or(z.literal("")),
+  twitter_profile_url: z.string().url().optional().or(z.literal("")),
 });
+type PersonCreateFormData = z.infer<typeof personCreateSchema>;
 
-type CreateClientFormData = z.infer<typeof createClientSchema>;
-
-interface ClientAccount {
-  id: string;
+interface Person { // Matches PersonInDB from backend
+  person_id: number;
+  full_name: string | null;
   email: string;
-  firstName: string;
-  lastName: string;
-  companyName?: string;
-  title?: string;
-  placementGoalNumber?: number;
-  goal?: string;
-  socialLinks?: {
-    linkedin?: string;
-    twitter?: string;
-    website?: string;
-  };
-  notes?: string;
-  createdAt: string;
-  lastLoginAt?: string;
-  isActive: boolean;
+  role: string | null;
+  company_id?: number | null;
+  linkedin_profile_url?: string | null;
+  twitter_profile_url?: string | null;
+  instagram_profile_url?: string | null;
+  tiktok_profile_url?: string | null;
+  dashboard_username?: string | null;
+  attio_contact_id?: string | null; // Assuming UUID is string here
+  created_at: string; // Assuming ISO string
+  updated_at: string; // Assuming ISO string
 }
 
-function CreateClientDialog({ onSuccess }: { onSuccess: () => void }) {
+// --- Campaign Schemas (Align with backend: podcast_outreach/api/schemas/campaign_schemas.py) ---
+const campaignCreateSchema = z.object({
+  person_id: z.number().int().positive("Client ID is required"), // This will be the person_id
+  campaign_name: z.string().min(1, "Campaign name is required"),
+  campaign_type: z.string().optional(),
+  campaign_keywords: z.array(z.string()).optional(),
+  mock_interview_trancript: z.string().optional(), // Can be GDoc link or text
+  media_kit_url: z.string().url().optional().or(z.literal("")),
+  goal_note: z.string().optional(),
+  instantly_campaign_id: z.string().optional(), // From backend schema
+});
+type CampaignCreateFormData = z.infer<typeof campaignCreateSchema>;
+
+interface Campaign { // Matches CampaignInDB from backend
+  campaign_id: string; // UUID
+  person_id: number;
+  campaign_name: string;
+  campaign_type?: string | null;
+  campaign_bio?: string | null;
+  campaign_angles?: string | null;
+  campaign_keywords?: string[] | null;
+  mock_interview_trancript?: string | null;
+  media_kit_url?: string | null;
+  goal_note?: string | null;
+  instantly_campaign_id?: string | null;
+  created_at: string; // Assuming ISO string
+}
+
+
+// --- Create Person Dialog ---
+function CreatePersonDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const tanstackQueryClient = useTanstackQueryClient(); // Use the renamed import
 
-  const form = useForm<CreateClientFormData>({
-    resolver: zodResolver(createClientSchema),
+  const form = useForm<PersonCreateFormData>({
+    resolver: zodResolver(personCreateSchema),
     defaultValues: {
+      full_name: "",
       email: "",
-      firstName: "",
-      lastName: "",
-      companyName: "",
-      title: "",
-      placementGoalNumber: 20,
-      goal: "",
-      socialLinks: {
-        linkedin: "",
-        twitter: "",
-        website: ""
-      },
-      notes: ""
+      role: "client", // Default role
+      linkedin_profile_url: "",
+      twitter_profile_url: "",
     }
   });
 
-  const createClientMutation = useMutation({
-    mutationFn: async (data: CreateClientFormData) => {
-      const response = await fetch("/api/admin/clients", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to create client");
-      }
-      
-      return response.json();
+  const createPersonMutation = useMutation({
+    mutationFn: async (data: PersonCreateFormData) => {
+      // Backend expects dashboard_password_hash, not plain password.
+      // This should be handled by a separate "set password" flow or backend logic.
+      // For now, we'll send it without password, assuming admin sets it later.
+      const payload = { ...data };
+      // delete payload.password; // If password field was in form
+
+      return apiRequest("POST", "/people/", payload);
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Client account created successfully"
-      });
+      toast({ title: "Success", description: "Person created successfully" });
       form.reset();
       setOpen(false);
-      onSuccess();
+      onSuccess(); // This will call appQueryClient.invalidateQueries
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to create client account",
+        title: "Error Creating Person",
+        description: error.message || "Failed to create person.",
         variant: "destructive"
       });
     }
   });
 
-  const onSubmit = (data: CreateClientFormData) => {
-    createClientMutation.mutate(data);
+  const onSubmit = (data: PersonCreateFormData) => {
+    createPersonMutation.mutate(data);
   };
 
   return (
@@ -133,214 +131,57 @@ function CreateClientDialog({ onSuccess }: { onSuccess: () => void }) {
       <DialogTrigger asChild>
         <Button className="flex items-center space-x-2">
           <UserPlus className="h-4 w-4" />
-          <span>Create Client Account</span>
+          <span>Create Person</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create New Client Account</DialogTitle>
+          <DialogTitle>Create New Person (Client/Host)</DialogTitle>
         </DialogHeader>
-        
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Basic Information */}
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="client@company.com" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      This will be their login email
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Smith" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="companyName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Company Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Acme Corporation" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="CEO" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="placementGoalNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Placement Goal</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="20" 
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Target number of podcast appearances
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Social Links */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Social Links (Optional)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="socialLinks.linkedin"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>LinkedIn</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://linkedin.com/in/..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="socialLinks.twitter"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Twitter</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://twitter.com/..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="socialLinks.website"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Website</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://company.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Business Goal */}
-            <FormField
-              control={form.control}
-              name="goal"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Business Goal</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="e.g., Work with Fortune 500 CISOs to implement AI solutions..."
-                      className="min-h-[80px]"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Target audience and objectives for podcast appearances
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Admin Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Admin Notes</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Internal notes about this client..."
-                      className="min-h-[60px]"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Private notes for your team (not visible to client)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="full_name" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Full Name</FormLabel>
+                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="email" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address</FormLabel>
+                <FormControl><Input type="email" placeholder="client@example.com" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="role" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Role</FormLabel>
+                <FormControl><Input placeholder="client" {...field} /></FormControl>
+                <FormDescription>E.g., client, host, contact</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+             <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
+              <FormItem>
+                <FormLabel>LinkedIn URL (Optional)</FormLabel>
+                <FormControl><Input placeholder="https://linkedin.com/in/..." {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="twitter_profile_url" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Twitter/X URL (Optional)</FormLabel>
+                <FormControl><Input placeholder="https://x.com/..." {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createPersonMutation.isPending}>
+                {createPersonMutation.isPending ? "Creating..." : "Create Person"}
               </Button>
-              <Button type="submit" disabled={createClientMutation.isPending}>
-                {createClientMutation.isPending ? "Creating..." : "Create Client"}
-              </Button>
-            </div>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>
@@ -348,108 +189,33 @@ function CreateClientDialog({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function ClientTable({ clients }: { clients: ClientAccount[] }) {
-  const { toast } = useToast();
-
-  const deleteClientMutation = useMutation({
-    mutationFn: async (clientId: string) => {
-      const response = await fetch(`/api/admin/clients/${clientId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to delete client");
-      }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Client account deleted successfully"
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete client account",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const handleDelete = (clientId: string) => {
-    if (confirm("Are you sure you want to delete this client account? This action cannot be undone.")) {
-      deleteClientMutation.mutate(clientId);
-    }
-  };
-
+// --- People Table ---
+function PeopleTable({ people, onEditPerson, onDeletePerson }: { people: Person[], onEditPerson: (person: Person) => void, onDeletePerson: (personId: number) => void }) {
   return (
     <div className="border rounded-lg">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Client</TableHead>
-            <TableHead>Company</TableHead>
-            <TableHead>Goal</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
             <TableHead>Created</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {clients.map((client) => (
-            <TableRow key={client.id}>
-              <TableCell>
-                <div>
-                  <div className="font-medium">{client.firstName} {client.lastName}</div>
-                  <div className="text-sm text-gray-500">{client.email}</div>
-                  {client.title && (
-                    <div className="text-sm text-gray-500">{client.title}</div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-1">
-                  <Building className="h-3 w-3 text-gray-400" />
-                  <span className="text-sm">{client.companyName || "N/A"}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-1">
-                  <Target className="h-3 w-3 text-gray-400" />
-                  <span className="text-sm">{client.placementGoalNumber || "N/A"} placements</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <Badge variant={client.isActive ? "default" : "secondary"}>
-                  {client.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-1">
-                  <Calendar className="h-3 w-3 text-gray-400" />
-                  <span className="text-sm">
-                    {new Date(client.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </TableCell>
+          {people.map((person) => (
+            <TableRow key={person.person_id}>
+              <TableCell>{person.full_name || "N/A"}</TableCell>
+              <TableCell>{person.email}</TableCell>
+              <TableCell><Badge variant="outline">{person.role || "N/A"}</Badge></TableCell>
+              <TableCell>{new Date(person.created_at).toLocaleDateString()}</TableCell>
               <TableCell>
                 <div className="flex items-center space-x-2">
-                  <Button size="sm" variant="outline">
+                  <Button size="sm" variant="outline" onClick={() => onEditPerson(person)}>
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={() => handleDelete(client.id)}
-                    disabled={deleteClientMutation.isPending}
-                  >
+                  <Button size="sm" variant="destructive" onClick={() => onDeletePerson(person.person_id)}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -462,106 +228,130 @@ function ClientTable({ clients }: { clients: ClientAccount[] }) {
   );
 }
 
+// --- Main Admin Panel Component ---
 export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
+  const tanstackQueryClient = useTanstackQueryClient();
 
-  const { data: clients = [], isLoading } = useQuery<ClientAccount[]>({
-    queryKey: ["/api/admin/clients"],
-    retry: false
+  // Fetch people (clients, hosts, etc.)
+  const { data: people = [], isLoading: isLoadingPeople } = useQuery<Person[]>({
+    queryKey: ["/people/"], // Ensure trailing slash if backend expects it
+    retry: false,
   });
 
-  const filteredClients = clients.filter((client: ClientAccount) =>
-    client.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (client.companyName && client.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Fetch campaigns (you might want to filter by person or show all for admin)
+  const { data: campaignsData = [], isLoading: isLoadingCampaigns } = useQuery<Campaign[]>({
+    queryKey: ["/campaigns/"], // Ensure trailing slash
+    retry: false,
+  });
+
+
+  const deletePersonMutation = useMutation({
+    mutationFn: async (personId: number) => {
+      return apiRequest("DELETE", `/people/${personId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Person deleted successfully" });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error Deleting Person",
+        description: error.message || "Failed to delete person.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleDeletePerson = (personId: number) => {
+    if (confirm("Are you sure you want to delete this person? This action cannot be undone.")) {
+      deletePersonMutation.mutate(personId);
+    }
+  };
+  
+  // TODO: Implement Edit Person Dialog and Logic
+  const handleEditPerson = (person: Person) => {
+    toast({ title: "Edit Person", description: `Editing ${person.full_name} (ID: ${person.person_id}) - Feature to be implemented.`});
+    // Open a dialog pre-filled with person data, similar to CreatePersonDialog
+    // Use a mutation with PUT /api/people/{person_id}
+  };
+
+  const filteredPeople = people.filter((person: Person) =>
+    (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const stats = {
-    totalClients: clients.length,
-    activeClients: clients.filter((c: ClientAccount) => c.isActive).length,
-    newThisMonth: clients.filter((c: ClientAccount) => 
-      new Date(c.createdAt).getMonth() === new Date().getMonth()
-    ).length
+    totalPeople: people.length,
+    totalCampaigns: campaignsData.length,
+    // Add more relevant admin stats if needed
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-          <p className="text-gray-600">Manage client accounts and settings</p>
+          <p className="text-gray-600">Manage People and System Settings</p>
         </div>
-        <CreateClientDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] })} />
+        <CreatePersonDialog onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] })} />
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Clients</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalClients}</p>
+                <p className="text-sm font-medium text-gray-600">Total People</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.totalPeople}</p>
               </div>
               <Users className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Clients</p>
-                <p className="text-3xl font-bold text-green-600">{stats.activeClients}</p>
+                <p className="text-sm font-medium text-gray-600">Total Campaigns</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.totalCampaigns}</p>
               </div>
-              <Users className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">New This Month</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.newThisMonth}</p>
-              </div>
-              <Plus className="h-8 w-8 text-blue-500" />
+              <Briefcase className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Client Accounts</CardTitle>
+          <CardTitle>People Management</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search clients by name, email, or company..."
+                placeholder="Search people by name, email, or role..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
           </div>
-
-          {isLoading ? (
+          {isLoadingPeople ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
-            <ClientTable clients={filteredClients} />
+            <PeopleTable people={filteredPeople} onEditPerson={handleEditPerson} onDeletePerson={handleDeletePerson} />
           )}
         </CardContent>
       </Card>
+      
+      {/* TODO: Add Campaign Management Table/Section here, fetching from /api/campaigns/ */}
+      {/* TODO: Add System Settings Section (e.g., API keys, default configurations if managed via UI) */}
     </div>
   );
 }

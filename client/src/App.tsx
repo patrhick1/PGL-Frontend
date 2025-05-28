@@ -17,6 +17,7 @@ import Approvals from "@/pages/Approvals";
 import PlacementTracking from "@/pages/PlacementTracking";
 import Settings from "@/pages/Settings";
 import AdminPanel from "@/pages/AdminPanel";
+import SignupPage from "@/pages/Signup";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -32,7 +33,11 @@ function Router() {
   return (
     <Switch>
       {!isAuthenticated ? (
-        <Route path="/" component={Landing} />
+        <> {/* Use a fragment to group routes */}
+          <Route path="/" component={Landing} />
+          <Route path="/login" component={Landing} /> {/* Assuming Landing also serves as login */}
+          <Route path="/signup" component={SignupPage} /> {/* Add signup route */}
+        </>
       ) : (
         <Layout>
           <Route path="/" component={Dashboard} />
