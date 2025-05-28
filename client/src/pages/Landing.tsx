@@ -1,39 +1,45 @@
 // client/src/pages/Landing.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Added useEffect
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mic, BarChart3, Users, Zap, LogIn } from "lucide-react";
+import { Mic, LogIn } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter"; // Added Link
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient"; // appQueryClient is not needed, use queryClient directly
 
 export default function Landing() {
-  const [email, setEmail] = useState(""); // Changed from username to email
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth(); // Get user for redirect check
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
-  if (isAuthenticated && user) { // Check if user object exists
-    navigate("/");
-    return null;
-  }
+  // If already authenticated (e.g. due to useEffect not running yet or race condition), redirect
+  if (isAuthenticated) return null;
+
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
       const formData = new URLSearchParams();
-      formData.append("username", email); // Backend /token expects 'username' field for email
+      formData.append("username", email); 
       formData.append("password", password);
 
+      // Assuming VITE_API_BASE_URL = http://localhost:8000
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/token`, {
         method: "POST",
         headers: {
@@ -48,9 +54,14 @@ export default function Landing() {
         throw new Error(errorData.detail || "Login failed");
       }
       
+      // const responseData = await response.json(); // Contains user role, person_id etc.
+      // console.log("Login successful, response data:", responseData); // For debugging
+
       toast({ title: "Login Successful", description: "Redirecting to dashboard..." });
-      await queryClient.invalidateQueries({ queryKey: ["/auth/me"] }); 
-      navigate("/");
+      await queryClient.invalidateQueries({ queryKey: ["/me"] }); // Corrected queryKey
+      // The useAuth hook will pick up the new auth state, and App.tsx router will redirect.
+      // Explicit navigation might still be good for immediate feedback.
+      navigate("/", { replace: true });
 
     } catch (error: any) {
       toast({
@@ -64,13 +75,12 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: '#a656eb' }}>
+    <div className="min-h-screen" style={{ background: 'hsl(var(--primary))' }}> {/* Use theme color */}
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <Card className="shadow-2xl">
             <CardContent className="p-8">
               <div className="text-center mb-8">
-                {/* ... (icon and title) ... */}
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Mic className="text-primary text-2xl h-8 w-8" />
                 </div>
@@ -80,13 +90,13 @@ export default function Landing() {
 
               <form onSubmit={handleSignIn} className="space-y-6">
                 <div>
-                  <Label htmlFor="email">Email Address</Label> {/* Changed label */}
+                  <Label htmlFor="email">Email Address</Label>
                   <Input 
                     id="email" 
-                    type="email" // Changed type to email
+                    type="email"
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)} 
-                    placeholder="you@example.com" // Updated placeholder
+                    placeholder="you@example.com"
                     required 
                     className="mt-1"
                   />
@@ -105,8 +115,8 @@ export default function Landing() {
                 </div>
                 <Button 
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-primary text-white hover:bg-secondary-700 py-3 text-lg font-medium"
+                  disabled={isLoading || authLoading} // Disable if auth check is also loading
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-3 text-base" // Adjusted size
                 >
                   {isLoading ? "Signing In..." : (
                     <>
@@ -117,16 +127,12 @@ export default function Landing() {
                 </Button>
               </form>
 
-              {/* Add Sign Up Link/Button Here */}
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-600">
                   Don't have an account?{' '}
-                  <button 
-                    onClick={() => navigate("/signup")} // Or your desired signup route
-                    className="font-medium text-primary hover:text-primary/80"
-                  >
+                  <Link href="/signup" className="font-medium text-primary hover:text-primary/80">
                     Sign Up
-                  </button>
+                  </Link>
                 </p>
               </div>
 

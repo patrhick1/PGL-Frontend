@@ -1,8 +1,8 @@
 // client/src/lib/queryClient.ts
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Use VITE_API_BASE_URL from .env, default to Python backend's typical local dev URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+// VITE_API_BASE_URL should be "http://localhost:8000" from .env
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -14,15 +14,20 @@ async function throwIfResNotOk(res: Response) {
     }
     // Use detail from FastAPI if available
     const message = errorPayload.detail || errorPayload.message || res.statusText;
-    throw new Error(`${res.status}: ${message}`);
+    // Construct a new Error object to include status
+    const error = new Error(`${res.status}: ${message}`) as any;
+    error.status = res.status;
+    error.payload = errorPayload;
+    throw error;
   }
 }
 
 export async function apiRequest(
   method: string,
-  urlPath: string, // Expecting path like "/campaigns" or "/people/1"
+  urlPath: string, // Expecting path like "/campaigns" or "/people/1" (these are full paths from root)
   data?: unknown | undefined,
 ): Promise<Response> {
+  // urlPath should be the full path from the server root, e.g., "/token", "/campaigns/"
   const fullUrl = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
   
   const res = await fetch(fullUrl, {
@@ -32,16 +37,15 @@ export async function apiRequest(
     credentials: "include", // Important for sending cookies
   });
 
-  await throwIfResNotOk(res);
-  return res;
+  // No throwIfResNotOk here, let the caller handle it or use it in getQueryFn
+  return res; // Return the raw response
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
-// Updated getQueryFn to handle 401 for useAuth correctly
 export const getQueryFn = <T>(options?: { on401?: UnauthorizedBehavior }): QueryFunction<T> =>
   async ({ queryKey }) => {
-    const urlPath = queryKey[0] as string;
+    const urlPath = queryKey[0] as string; // urlPath should be the full path from server root
     const fullUrl = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
     
     const res = await fetch(fullUrl, {
@@ -50,17 +54,19 @@ export const getQueryFn = <T>(options?: { on401?: UnauthorizedBehavior }): Query
 
     if (!res.ok) {
       if (res.status === 401 && options?.on401 === "returnNull") {
-        return null as T; // Return null if 401 and on401 is 'returnNull'
+        return null as T; 
       }
-      // For other errors, or if on401 is 'throw' (default)
       let errorPayload: any = { message: res.statusText };
       try {
         errorPayload = await res.json();
       } catch (e) { /* ignore */ }
       const message = errorPayload.detail || errorPayload.message || res.statusText;
-      throw new Error(`${res.status}: ${message}`);
+      const error = new Error(`${res.status}: ${message}`) as any;
+      error.status = res.status;
+      error.payload = errorPayload;
+      throw error;
     }
-    if (res.status === 204) { // Handle No Content responses
+    if (res.status === 204) { 
         return null as T;
     }
     return await res.json();
@@ -70,11 +76,17 @@ export const getQueryFn = <T>(options?: { on401?: UnauthorizedBehavior }): Query
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn(), // Default queryFn
+      queryFn: getQueryFn(), 
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      refetchOnWindowFocus: false, // Consider setting to true for better UX
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: (failureCount, error: any) => {
+        // Do not retry on 401 or 404 errors
+        if (error.status === 401 || error.status === 404) {
+          return false;
+        }
+        return failureCount < 2; // Retry twice for other errors
+      },
     },
     mutations: {
       retry: false,
