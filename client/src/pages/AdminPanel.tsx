@@ -1,41 +1,57 @@
 // client/src/pages/AdminPanel.tsx
-import { useState, useEffect } from "react"; // Added useEffect
-import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query"; // Renamed import
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // Keep Textarea
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog"; // Added DialogFooter, DialogClose
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient"; // Renamed import
+import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Users, Plus, Edit, Trash2, Mail, Building, Target, Calendar, UserPlus, Search, Briefcase, LinkIcon, Info
+  Users, Plus, Edit, Trash2, KeyRound, Search, Briefcase, Settings as SettingsIcon, Eye, EyeOff, CheckCircle, LinkIcon
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 // --- Person Schemas (Align with backend: podcast_outreach/api/schemas/person_schemas.py) ---
 const personCreateSchema = z.object({
   full_name: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email address"),
-  role: z.string().min(1, "Role is required (e.g., client, host)"),
-  // dashboard_username and dashboard_password_hash are usually set via specific auth flows or backend logic
-  // For simplicity, we might omit them here or make them optional if admin sets them.
-  // For now, let's make them optional.
+  role: z.string().min(1, "Role is required (e.g., client, host, admin, staff)"),
   dashboard_username: z.string().optional(),
-  // Password should be handled securely, ideally via a "set password" endpoint after creation.
-  // Do not send plain passwords if dashboard_password_hash is expected.
-  // For this example, let's assume password is set separately.
-  linkedin_profile_url: z.string().url().optional().or(z.literal("")),
-  twitter_profile_url: z.string().url().optional().or(z.literal("")),
+  linkedin_profile_url: z.string().url("Invalid LinkedIn URL").optional().or(z.literal("")),
+  twitter_profile_url: z.string().url("Invalid Twitter/X URL").optional().or(z.literal("")),
 });
 type PersonCreateFormData = z.infer<typeof personCreateSchema>;
 
-interface Person { // Matches PersonInDB from backend
+const personUpdateSchema = z.object({
+  full_name: z.string().min(1, "Full name is required").optional(),
+  email: z.string().email("Invalid email address").optional(),
+  role: z.string().min(1, "Role is required").optional(),
+  dashboard_username: z.string().optional(),
+  linkedin_profile_url: z.string().url("Invalid LinkedIn URL").optional().or(z.literal("")),
+  twitter_profile_url: z.string().url("Invalid Twitter/X URL").optional().or(z.literal("")),
+});
+type PersonUpdateFormData = z.infer<typeof personUpdateSchema>;
+
+const setPasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+type SetPasswordFormData = z.infer<typeof setPasswordSchema>;
+
+interface Person {
   person_id: number;
   full_name: string | null;
   email: string;
@@ -46,25 +62,54 @@ interface Person { // Matches PersonInDB from backend
   instagram_profile_url?: string | null;
   tiktok_profile_url?: string | null;
   dashboard_username?: string | null;
-  attio_contact_id?: string | null; // Assuming UUID is string here
-  created_at: string; // Assuming ISO string
-  updated_at: string; // Assuming ISO string
+  attio_contact_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  dashboard_password_hash?: string | null;
 }
 
 // --- Campaign Schemas (Align with backend: podcast_outreach/api/schemas/campaign_schemas.py) ---
-const campaignCreateSchema = z.object({
-  person_id: z.number().int().positive("Client ID is required"), // This will be the person_id
+const campaignBaseSchemaParts = {
+  person_id: z.coerce.number().int().positive("Client (Person ID) is required"),
   campaign_name: z.string().min(1, "Campaign name is required"),
   campaign_type: z.string().optional(),
-  campaign_keywords: z.array(z.string()).optional(),
-  mock_interview_trancript: z.string().optional(), // Can be GDoc link or text
-  media_kit_url: z.string().url().optional().or(z.literal("")),
+  campaign_keywords_str: z.string().optional().describe("Comma-separated keywords"),
+  mock_interview_trancript: z.string().optional(),
+  media_kit_url: z.string().url("Invalid URL").optional().or(z.literal("")),
   goal_note: z.string().optional(),
-  instantly_campaign_id: z.string().optional(), // From backend schema
-});
-type CampaignCreateFormData = z.infer<typeof campaignCreateSchema>;
+  instantly_campaign_id: z.string().optional(),
+};
 
-interface Campaign { // Matches CampaignInDB from backend
+const campaignCreateSchema = z.object(campaignBaseSchemaParts)
+  .transform(data => ({
+    ...data,
+    campaign_keywords: data.campaign_keywords_str?.split(',').map((kw: string) => kw.trim()).filter((kw: string) => kw) || [],
+  }));
+
+type CampaignCreateFormInput = z.input<typeof campaignCreateSchema>; 
+type CampaignCreatePayload = z.output<typeof campaignCreateSchema>; 
+
+const campaignUpdateSchemaContents = {
+  person_id: z.coerce.number().int().positive("Client (Person ID) is required").optional(),
+  campaign_name: z.string().min(1, "Campaign name is required").optional(),
+  campaign_type: z.string().optional().nullable(),
+  campaign_keywords_str: z.string().optional().nullable().describe("Comma-separated keywords"),
+  mock_interview_trancript: z.string().optional().nullable(),
+  media_kit_url: z.string().url("Invalid URL").optional().or(z.literal("")).nullable(),
+  goal_note: z.string().optional().nullable(),
+  instantly_campaign_id: z.string().optional().nullable(),
+};
+const campaignUpdateSchema = z.object(campaignUpdateSchemaContents)
+  .transform(data => ({
+    ...data,
+    campaign_keywords: data.campaign_keywords_str?.split(',').map((kw: string) => kw.trim()).filter((kw: string) => kw) || undefined, 
+  }));
+
+type CampaignUpdateFormInput = z.input<typeof campaignUpdateSchema>;
+type CampaignUpdatePayload = z.output<typeof campaignUpdateSchema>;
+
+
+interface Campaign {
   campaign_id: string; // UUID
   person_id: number;
   campaign_name: string;
@@ -76,105 +121,62 @@ interface Campaign { // Matches CampaignInDB from backend
   media_kit_url?: string | null;
   goal_note?: string | null;
   instantly_campaign_id?: string | null;
-  created_at: string; // Assuming ISO string
+  created_at: string;
 }
-
 
 // --- Create Person Dialog ---
 function CreatePersonDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const tanstackQueryClient = useTanstackQueryClient(); // Use the renamed import
 
   const form = useForm<PersonCreateFormData>({
     resolver: zodResolver(personCreateSchema),
     defaultValues: {
-      full_name: "",
-      email: "",
-      role: "client", // Default role
-      linkedin_profile_url: "",
-      twitter_profile_url: "",
+      full_name: "", email: "", role: "client", dashboard_username: "",
+      linkedin_profile_url: "", twitter_profile_url: "",
     }
   });
 
   const createPersonMutation = useMutation({
-    mutationFn: async (data: PersonCreateFormData) => {
-      // Backend expects dashboard_password_hash, not plain password.
-      // This should be handled by a separate "set password" flow or backend logic.
-      // For now, we'll send it without password, assuming admin sets it later.
-      const payload = { ...data };
-      // delete payload.password; // If password field was in form
-
-      return apiRequest("POST", "/people/", payload);
-    },
+    mutationFn: (data: PersonCreateFormData) => apiRequest("POST", "/people/", data),
     onSuccess: () => {
-      toast({ title: "Success", description: "Person created successfully" });
-      form.reset();
-      setOpen(false);
-      onSuccess(); // This will call appQueryClient.invalidateQueries
+      toast({ title: "Success", description: "Person created successfully. You can now set their password." });
+      form.reset(); setOpen(false); onSuccess();
     },
     onError: (error: any) => {
       toast({
         title: "Error Creating Person",
-        description: error.message || "Failed to create person.",
-        variant: "destructive"
+        description: error.message || "Failed to create person.", variant: "destructive"
       });
     }
   });
 
-  const onSubmit = (data: PersonCreateFormData) => {
-    createPersonMutation.mutate(data);
-  };
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="flex items-center space-x-2">
-          <UserPlus className="h-4 w-4" />
-          <span>Create Person</span>
-        </Button>
+        <Button><Plus className="h-4 w-4 mr-2" />Create Person</Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create New Person (Client/Host)</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>Create New Person</DialogTitle></DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(data => createPersonMutation.mutate(data))} className="space-y-4">
             <FormField control={form.control} name="full_name" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Full Name</FormLabel>
-                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="John Doe" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="email" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email Address</FormLabel>
-                <FormControl><Input type="email" placeholder="client@example.com" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="role" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Role</FormLabel>
-                <FormControl><Input placeholder="client" {...field} /></FormControl>
-                <FormDescription>E.g., client, host, contact</FormDescription>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Role</FormLabel><FormControl><Input placeholder="client / staff / admin" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
-             <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
-              <FormItem>
-                <FormLabel>LinkedIn URL (Optional)</FormLabel>
-                <FormControl><Input placeholder="https://linkedin.com/in/..." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+            <FormField control={form.control} name="dashboard_username" render={({ field }) => (
+              <FormItem><FormLabel>Dashboard Username (Optional)</FormLabel><FormControl><Input placeholder="Leave blank to use email" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
+              <FormItem><FormLabel>LinkedIn URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/..." {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="twitter_profile_url" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Twitter/X URL (Optional)</FormLabel>
-                <FormControl><Input placeholder="https://x.com/..." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Twitter/X URL (Optional)</FormLabel><FormControl><Input placeholder="https://x.com/..." {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -189,33 +191,198 @@ function CreatePersonDialog({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// --- People Table ---
-function PeopleTable({ people, onEditPerson, onDeletePerson }: { people: Person[], onEditPerson: (person: Person) => void, onDeletePerson: (personId: number) => void }) {
+// --- Edit Person Dialog ---
+function EditPersonDialog({ person, open, onOpenChange, onSuccess }: { person: Person | null; open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
+  const { toast } = useToast();
+  const form = useForm<PersonUpdateFormData>({
+    resolver: zodResolver(personUpdateSchema),
+    defaultValues: {},
+  });
+
+  useEffect(() => {
+    if (person && open) { // Reset form only when dialog opens with a person
+      form.reset({
+        full_name: person.full_name || "",
+        email: person.email || "",
+        role: person.role || "",
+        dashboard_username: person.dashboard_username || "",
+        linkedin_profile_url: person.linkedin_profile_url || "",
+        twitter_profile_url: person.twitter_profile_url || "",
+      });
+    }
+  }, [person, form, open]);
+
+  const editPersonMutation = useMutation({
+    mutationFn: (data: PersonUpdateFormData) => apiRequest("PUT", `/people/${person!.person_id}`, data),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Person updated successfully." });
+      onOpenChange(false); onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Updating Person", description: error.message || "Failed to update person.", variant: "destructive" });
+    }
+  });
+
+  if (!person) return null;
+
   return (
-    <div className="border rounded-lg">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Edit Person: {person.full_name || person.email}</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(data => editPersonMutation.mutate(data))} className="space-y-4">
+            <FormField control={form.control} name="full_name" render={({ field }) => (
+              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="email" render={({ field }) => (
+              <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="role" render={({ field }) => (
+              <FormItem><FormLabel>Role</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="dashboard_username" render={({ field }) => (
+              <FormItem><FormLabel>Dashboard Username</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+             <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
+              <FormItem><FormLabel>LinkedIn URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="twitter_profile_url" render={({ field }) => (
+              <FormItem><FormLabel>Twitter/X URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={editPersonMutation.isPending}>
+                {editPersonMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- Set Password Dialog ---
+function SetPasswordDialog({ personId, personName, open, onOpenChange, onSuccess }: { personId: number | null; personName: string | null; open: boolean; onOpenChange: (open: boolean) => void; onSuccess?: () => void; }) {
+  const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const form = useForm<SetPasswordFormData>({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: (data: { password: string }) => apiRequest("PUT", `/people/${personId}/set-password`, data),
+    onSuccess: () => {
+      toast({ title: "Success", description: `Password set for ${personName || 'user'}.` });
+      form.reset(); onOpenChange(false); onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Setting Password", description: error.message || "Failed to set password.", variant: "destructive" });
+    }
+  });
+
+  if (!personId) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Set Password for {personName || `Person ID: ${personId}`}</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(data => setPasswordMutation.mutate({ password: data.password }))} className="space-y-4">
+            <FormField control={form.control} name="password" render={({ field }) => (
+              <FormItem>
+                <FormLabel>New Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input type={showPassword ? "text" : "password"} {...field} />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-7" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="confirmPassword" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm New Password</FormLabel>
+                 <FormControl>
+                  <div className="relative">
+                    <Input type={showConfirmPassword ? "text" : "password"} {...field} />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)} tabIndex={-1}>
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={setPasswordMutation.isPending}>
+                {setPasswordMutation.isPending ? "Setting..." : "Set Password"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- People Table ---
+function PeopleTable({ people, onEditPerson, onDeletePerson, onSetPassword }: { 
+  people: Person[]; 
+  onEditPerson: (person: Person) => void; 
+  onDeletePerson: (personId: number) => void;
+  onSetPassword: (personId: number, personName: string | null) => void;
+}) {
+  return (
+    <div className="border rounded-lg overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>ID</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Username</TableHead>
+            <TableHead>Password Set?</TableHead>
             <TableHead>Created</TableHead>
-            <TableHead>Actions</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
+          {people.length === 0 && (
+            <TableRow><TableCell colSpan={8} className="text-center text-gray-500 py-4">No people found.</TableCell></TableRow>
+          )}
           {people.map((person) => (
             <TableRow key={person.person_id}>
+              <TableCell>{person.person_id}</TableCell>
               <TableCell>{person.full_name || "N/A"}</TableCell>
               <TableCell>{person.email}</TableCell>
-              <TableCell><Badge variant="outline">{person.role || "N/A"}</Badge></TableCell>
+              <TableCell><Badge variant={person.role === 'admin' ? 'destructive' : person.role === 'staff' ? 'secondary' : 'outline'}>{person.role || "N/A"}</Badge></TableCell>
+              <TableCell>{person.dashboard_username || "N/A"}</TableCell>
+              <TableCell className="text-center">
+                {person.dashboard_password_hash ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </TableCell>
               <TableCell>{new Date(person.created_at).toLocaleDateString()}</TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-2">
-                  <Button size="sm" variant="outline" onClick={() => onEditPerson(person)}>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end space-x-1">
+                  <Button size="sm" variant="outline" onClick={() => onEditPerson(person)} title="Edit Person">
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => onDeletePerson(person.person_id)}>
+                  <Button size="sm" variant="outline" onClick={() => onSetPassword(person.person_id, person.full_name)} title="Set Password">
+                    <KeyRound className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => onDeletePerson(person.person_id)} title="Delete Person">
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -228,75 +395,323 @@ function PeopleTable({ people, onEditPerson, onDeletePerson }: { people: Person[
   );
 }
 
+// --- Create Campaign Dialog ---
+function CreateCampaignDialog({ people, onSuccess }: { people: Person[]; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+
+  const form = useForm<CampaignCreateFormInput>({ 
+    resolver: zodResolver(campaignCreateSchema), 
+    defaultValues: {
+      campaign_name: "",
+      campaign_type: "",
+      campaign_keywords_str: "", 
+      mock_interview_trancript: "",
+      media_kit_url: "",
+      goal_note: "",
+      instantly_campaign_id: ""
+    }
+  });
+
+  const createCampaignMutation = useMutation({
+    mutationFn: (data: CampaignCreatePayload) => { 
+        return apiRequest("POST", "/campaigns/", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Campaign created successfully." });
+      form.reset(); setOpen(false); onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Creating Campaign", description: error.message || "Failed to create campaign.", variant: "destructive" });
+    }
+  });
+  
+  const onSubmit = (formData: CampaignCreateFormInput) => {
+    createCampaignMutation.mutate(formData as any); 
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button><Plus className="h-4 w-4 mr-2" />Create Campaign</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Create New Campaign</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="person_id" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Client (Person)</FormLabel>
+                <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {people.filter(p => p.role === 'client').map(p => (
+                      <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_name" render={({ field }) => (
+              <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input placeholder="Q4 SaaS Outreach" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_type" render={({ field }) => (
+              <FormItem><FormLabel>Campaign Type (Optional)</FormLabel><FormControl><Input placeholder="B2B Tech" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
+              <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input placeholder="AI, SaaS, growth" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
+              <FormItem><FormLabel>Mock Interview Transcript/Link (Optional)</FormLabel><FormControl><Textarea placeholder="Paste transcript or GDoc link..." {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="media_kit_url" render={({ field }) => (
+              <FormItem><FormLabel>Media Kit URL (Optional)</FormLabel><FormControl><Input placeholder="https://link.to/mediakit" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
+              <FormItem><FormLabel>Instantly Campaign ID (Optional)</FormLabel><FormControl><Input placeholder="Instantly.ai campaign ID" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createCampaignMutation.isPending}>
+                {createCampaignMutation.isPending ? "Creating..." : "Create Campaign"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- Edit Campaign Dialog ---
+function EditCampaignDialog({ campaign, people, open, onOpenChange, onSuccess }: { campaign: Campaign | null; people: Person[]; open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
+  const { toast } = useToast();
+  const form = useForm<CampaignUpdateFormInput>({ 
+    resolver: zodResolver(campaignUpdateSchema), 
+    defaultValues: {}, 
+  });
+
+  useEffect(() => {
+    if (campaign && open) {
+      form.reset({
+        person_id: campaign.person_id,
+        campaign_name: campaign.campaign_name,
+        campaign_type: campaign.campaign_type || "", 
+        campaign_keywords_str: (campaign.campaign_keywords || []).join(', '), 
+        mock_interview_trancript: campaign.mock_interview_trancript || "",
+        media_kit_url: campaign.media_kit_url || "",
+        goal_note: campaign.goal_note || "",
+        instantly_campaign_id: campaign.instantly_campaign_id || "",
+      });
+    }
+  }, [campaign, form, open]);
+
+  const editCampaignMutation = useMutation({
+    mutationFn: (data: CampaignUpdatePayload) => { 
+      return apiRequest("PUT", `/campaigns/${campaign!.campaign_id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Campaign updated successfully." });
+      onOpenChange(false); onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Updating Campaign", description: error.message || "Failed to update campaign.", variant: "destructive" });
+    }
+  });
+  
+  const onEditSubmit = (formData: CampaignUpdateFormInput) => {
+      editCampaignMutation.mutate(formData as any); 
+  };
+
+  if (!campaign) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Edit Campaign: {campaign.campaign_name}</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
+            <FormField control={form.control} name="person_id" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Client (Person)</FormLabel>
+                 <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {people.filter(p => p.role === 'client').map(p => (
+                      <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_name" render={({ field }) => (
+              <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_type" render={({ field }) => (
+              <FormItem><FormLabel>Campaign Type</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
+              <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
+              <FormItem><FormLabel>Mock Interview Transcript/Link</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="media_kit_url" render={({ field }) => (
+              <FormItem><FormLabel>Media Kit URL</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
+              <FormItem><FormLabel>Instantly Campaign ID</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={editCampaignMutation.isPending}>
+                {editCampaignMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+// --- Campaigns Table ---
+function CampaignsTable({ campaigns, onEditCampaign, onDeleteCampaign }: { 
+  campaigns: Campaign[];
+  onEditCampaign: (campaign: Campaign) => void;
+  onDeleteCampaign: (campaignId: string) => void;
+}) {
+  return (
+    <div className="border rounded-lg overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Campaign Name</TableHead>
+            <TableHead>Client ID</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Keywords</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {campaigns.length === 0 && (
+            <TableRow><TableCell colSpan={6} className="text-center text-gray-500 py-4">No campaigns found.</TableCell></TableRow>
+          )}
+          {campaigns.map((campaign) => (
+            <TableRow key={campaign.campaign_id}>
+              <TableCell className="font-medium">{campaign.campaign_name}</TableCell>
+              <TableCell>{campaign.person_id}</TableCell>
+              <TableCell>{campaign.campaign_type || "N/A"}</TableCell>
+              <TableCell className="max-w-xs truncate">{(campaign.campaign_keywords || []).join(', ') || "N/A"}</TableCell>
+              <TableCell>{new Date(campaign.created_at).toLocaleDateString()}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end space-x-1">
+                  <Button size="sm" variant="outline" onClick={() => onEditCampaign(campaign)} title="Edit Campaign">
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => onDeleteCampaign(campaign.campaign_id)} title="Delete Campaign">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+
 // --- Main Admin Panel Component ---
 export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
 
-  // Fetch people (clients, hosts, etc.)
-  const { data: people = [], isLoading: isLoadingPeople } = useQuery<Person[]>({
-    queryKey: ["/people/"], // Ensure trailing slash if backend expects it
-    retry: false,
-  });
+  const [isCreatePersonDialogOpen, setIsCreatePersonDialogOpen] = useState(false);
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null);
+  const [isEditPersonDialogOpen, setIsEditPersonDialogOpen] = useState(false);
+  const [passwordPerson, setPasswordPerson] = useState<{ id: number; name: string | null } | null>(null);
+  const [isSetPasswordDialogOpen, setIsSetPasswordDialogOpen] = useState(false);
 
-  // Fetch campaigns (you might want to filter by person or show all for admin)
-  const { data: campaignsData = [], isLoading: isLoadingCampaigns } = useQuery<Campaign[]>({
-    queryKey: ["/campaigns/"], // Ensure trailing slash
-    retry: false,
-  });
+  const [isCreateCampaignDialogOpen, setIsCreateCampaignDialogOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [isEditCampaignDialogOpen, setIsEditCampaignDialogOpen] = useState(false);
 
+
+  const { data: people = [], isLoading: isLoadingPeople, error: peopleError } = useQuery<Person[]>({
+    queryKey: ["/people/"], retry: 1,
+  });
+  const { data: campaignsData = [], isLoading: isLoadingCampaigns, error: campaignsError } = useQuery<Campaign[]>({
+    queryKey: ["/campaigns/"], retry: 1,
+  });
 
   const deletePersonMutation = useMutation({
-    mutationFn: async (personId: number) => {
-      return apiRequest("DELETE", `/people/${personId}`);
-    },
+    mutationFn: (personId: number) => apiRequest("DELETE", `/people/${personId}`),
     onSuccess: () => {
       toast({ title: "Success", description: "Person deleted successfully" });
       tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error Deleting Person",
-        description: error.message || "Failed to delete person.",
-        variant: "destructive"
-      });
+      toast({ title: "Error Deleting Person", description: error.message || "Failed to delete person.", variant: "destructive" });
+    }
+  });
+
+  const deleteCampaignMutation = useMutation({
+    mutationFn: (campaignId: string) => apiRequest("DELETE", `/campaigns/${campaignId}`),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Campaign deleted successfully" });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Deleting Campaign", description: error.message || "Failed to delete campaign.", variant: "destructive" });
     }
   });
 
   const handleDeletePerson = (personId: number) => {
-    if (confirm("Are you sure you want to delete this person? This action cannot be undone.")) {
+    if (window.confirm("Are you sure you want to delete this person? This action cannot be undone and might affect associated campaigns.")) {
       deletePersonMutation.mutate(personId);
     }
   };
   
-  // TODO: Implement Edit Person Dialog and Logic
-  const handleEditPerson = (person: Person) => {
-    toast({ title: "Edit Person", description: `Editing ${person.full_name} (ID: ${person.person_id}) - Feature to be implemented.`});
-    // Open a dialog pre-filled with person data, similar to CreatePersonDialog
-    // Use a mutation with PUT /api/people/{person_id}
+  const handleDeleteCampaign = (campaignId: string) => {
+    if (window.confirm("Are you sure you want to delete this campaign? This action cannot be undone.")) {
+      deleteCampaignMutation.mutate(campaignId);
+    }
   };
+
+  const openEditPersonDialog = (person: Person) => { setEditingPerson(person); setIsEditPersonDialogOpen(true); };
+  const openSetPasswordDialog = (personId: number, personName: string | null) => { setPasswordPerson({ id: personId, name: personName }); setIsSetPasswordDialogOpen(true); };
+  const openEditCampaignDialog = (campaign: Campaign) => { setEditingCampaign(campaign); setIsEditCampaignDialogOpen(true); };
+
 
   const filteredPeople = people.filter((person: Person) =>
     (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase()))
+    (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    person.person_id.toString().includes(searchTerm)
   );
+  // TODO: Add filteredCampaigns if search is needed for campaigns
 
   const stats = {
     totalPeople: people.length,
     totalCampaigns: campaignsData.length,
-    // Add more relevant admin stats if needed
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-          <p className="text-gray-600">Manage People and System Settings</p>
+          <p className="text-gray-600">Manage People, Campaigns, and System Settings</p>
         </div>
-        <CreatePersonDialog onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] })} />
+        {/* Add Create Person Dialog Trigger here */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -305,7 +720,7 @@ export default function AdminPanel() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total People</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalPeople}</p>
+                <p className="text-3xl font-bold text-gray-900">{isLoadingPeople ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalPeople}</p>
               </div>
               <Users className="h-8 w-8 text-primary" />
             </div>
@@ -316,7 +731,7 @@ export default function AdminPanel() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Campaigns</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalCampaigns}</p>
+                <p className="text-3xl font-bold text-gray-900">{isLoadingCampaigns ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalCampaigns}</p>
               </div>
               <Briefcase className="h-8 w-8 text-primary" />
             </div>
@@ -325,15 +740,19 @@ export default function AdminPanel() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>People Management</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>People Management</CardTitle>
+                <CardDescription>View, create, edit, and manage users (clients, staff, admins).</CardDescription>
+            </div>
+            <CreatePersonDialog onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] })} />
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search people by name, email, or role..."
+                placeholder="Search people by ID, name, email, role, username..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -341,17 +760,94 @@ export default function AdminPanel() {
             </div>
           </div>
           {isLoadingPeople ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="space-y-3">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
             </div>
+          ) : peopleError ? (
+            <p className="text-red-500">Error loading people: {(peopleError as Error).message}</p>
           ) : (
-            <PeopleTable people={filteredPeople} onEditPerson={handleEditPerson} onDeletePerson={handleDeletePerson} />
+            <PeopleTable 
+              people={filteredPeople} 
+              onEditPerson={openEditPersonDialog} 
+              onDeletePerson={handleDeletePerson}
+              onSetPassword={openSetPasswordDialog}
+            />
           )}
         </CardContent>
       </Card>
       
-      {/* TODO: Add Campaign Management Table/Section here, fetching from /api/campaigns/ */}
-      {/* TODO: Add System Settings Section (e.g., API keys, default configurations if managed via UI) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>Campaign Management</CardTitle>
+                <CardDescription>Overview of all client campaigns.</CardDescription>
+            </div>
+            <CreateCampaignDialog people={people} onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] })} />
+        </CardHeader>
+        <CardContent>
+          {isLoadingCampaigns ? (
+             <div className="space-y-3">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
+            </div>
+          ) : campaignsError ? (
+            <p className="text-red-500">Error loading campaigns: {(campaignsError as Error).message}</p>
+          ) : (
+            <CampaignsTable 
+                campaigns={campaignsData} 
+                onEditCampaign={openEditCampaignDialog}
+                onDeleteCampaign={handleDeleteCampaign}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {isEditPersonDialogOpen && editingPerson && (
+        <EditPersonDialog
+          person={editingPerson}
+          open={isEditPersonDialogOpen}
+          onOpenChange={setIsEditPersonDialogOpen}
+          onSuccess={() => {
+            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+            setEditingPerson(null);
+          }}
+        />
+      )}
+
+      {isSetPasswordDialogOpen && passwordPerson && (
+        <SetPasswordDialog
+          personId={passwordPerson.id}
+          personName={passwordPerson.name}
+          open={isSetPasswordDialogOpen}
+          onOpenChange={setIsSetPasswordDialogOpen}
+          onSuccess={() => {
+            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+            setPasswordPerson(null);
+          }}
+        />
+      )}
+
+      {isEditCampaignDialogOpen && editingCampaign && (
+        <EditCampaignDialog
+          campaign={editingCampaign}
+          people={people}
+          open={isEditCampaignDialogOpen}
+          onOpenChange={setIsEditCampaignDialogOpen}
+          onSuccess={() => {
+            tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] });
+            setEditingCampaign(null);
+          }}
+        />
+      )}
+      
+      <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center"><SettingsIcon className="mr-2 h-5 w-5"/>System Settings</CardTitle>
+            <CardDescription>Configure global system parameters (Placeholder).</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <p className="text-gray-500">System settings management will be implemented here.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

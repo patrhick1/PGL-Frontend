@@ -1,609 +1,252 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// client/src/pages/AnglesGenerator.tsx
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { 
   Target, 
   Copy, 
   RefreshCw, 
-  MessageSquare,
   Sparkles,
-  ChevronRight,
-  CheckCircle,
-  Clock,
-  Brain
+  Lightbulb,
+  AlertTriangle,
+  Link as LinkIcon, // Renamed to avoid conflict with wouter Link
+  Info
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/useAuth";
+import { Link } from "wouter"; // For navigation links
 
-const angleGeneratorSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  title: z.string().min(1, "Title is required"),
-  companyName: z.string().min(1, "Company name is required"),
-  socialLinks: z.object({
-    linkedin: z.string().url().optional().or(z.literal("")),
-    twitter: z.string().url().optional().or(z.literal("")),
-    website: z.string().url().optional().or(z.literal(""))
-  }),
-  existingPodcasts: z.string().optional(),
-  goal: z.string().min(1, "Goal is required"),
-  placementGoalNumber: z.number().min(1, "Placement goal number must be at least 1"),
-  interviewResponses: z.record(z.string().min(10, "Please provide a detailed response")),
-  pastEpisodeTranscripts: z.string().optional(),
-  featuredArticles: z.string().optional(),
-  socialPosts: z.string().optional(),
-});
-
-type AngleGeneratorFormData = z.infer<typeof angleGeneratorSchema>;
-
-interface GeneratedAngle {
-  id: string;
-  title: string;
-  description: string;
-  keyPoints: string[];
-  targetAudience: string;
-  podcastTypes: string[];
-  confidence: number;
+interface ClientCampaign {
+  campaign_id: string;
+  campaign_name: string;
+  person_id: number;
+  campaign_bio?: string | null;
+  campaign_angles?: string | null;
+  mock_interview_trancript?: string | null;
+  campaign_keywords?: string[] | null;
 }
 
-interface InterviewQuestion {
-  id: string;
-  question: string;
-  category: string;
-  required: boolean;
+// This interface is a placeholder. The actual angles are generated as GDoc content.
+// The backend returns links to these GDocs.
+interface GeneratedAngleDisplayInfo {
+  title: string; // e.g., "Generated Angles Document"
+  link: string;
+  type: "angles" | "bio";
 }
 
-// Mock interview questions based on your provided examples
-const mockInterviewQuestions: InterviewQuestion[] = [
-  {
-    id: "target_audience",
-    question: "Who do you want to be famous to?",
-    category: "Personal Brand",
-    required: true
-  },
-  {
-    id: "unique_value",
-    question: "Why you and not someone else?",
-    category: "Personal Brand", 
-    required: true
-  },
-  {
-    id: "business_pitch",
-    question: "How would you pitch your business to your ideal client?",
-    category: "Business",
-    required: true
-  },
-  {
-    id: "industry_trends",
-    question: "What trends are shaping your industry? How are you evolving with the trend?",
-    category: "Industry Expertise",
-    required: true
-  },
-  {
-    id: "brand_impression",
-    question: "What impressions do you hope to make of people when they come in contact with your brand?",
-    category: "Personal Brand",
-    required: false
-  },
-  {
-    id: "career_experience",
-    question: "How does your current role/experience inform your approach to your business?",
-    category: "Professional Background",
-    required: false
-  },
-  {
-    id: "international_perspective",
-    question: "How has your international perspective shaped your understanding of your market?",
-    category: "Global Experience",
-    required: false
-  },
-  {
-    id: "pivotal_moment",
-    question: "Looking back at your career, what's been the most pivotal moment that shaped your approach?",
-    category: "Personal Story",
-    required: false
-  },
-  {
-    id: "advice_newcomers",
-    question: "What advice would you give to someone considering a career in your field?",
-    category: "Industry Expertise",
-    required: false
-  },
-  {
-    id: "biggest_challenges",
-    question: "What are the biggest challenges companies face in your industry, and how do you help them overcome those hurdles?",
-    category: "Business Solutions",
-    required: false
-  }
-];
-
-function AngleCard({ angle }: { angle: GeneratedAngle }) {
-  const { toast } = useToast();
-
-  const copyAngle = () => {
-    const angleText = `${angle.title}\n\n${angle.description}\n\nKey Points:\n${angle.keyPoints.map(point => `• ${point}`).join('\n')}\n\nTarget Audience: ${angle.targetAudience}\nBest for: ${angle.podcastTypes.join(', ')}`;
-    navigator.clipboard.writeText(angleText);
-    toast({
-      title: "Copied!",
-      description: "Pitch angle copied to clipboard.",
-    });
-  };
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 90) return "bg-green-100 text-green-800";
-    if (confidence >= 75) return "bg-blue-100 text-blue-800";
-    if (confidence >= 60) return "bg-yellow-100 text-yellow-800";
-    return "bg-gray-100 text-gray-800";
-  };
-
-  return (
-    <Card className="hover:shadow-md transition-all">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg flex items-center">
-              <Target className="mr-2 h-5 w-5 text-primary" />
-              {angle.title}
-            </CardTitle>
-            <Badge className={`mt-2 ${getConfidenceColor(angle.confidence)}`}>
-              {angle.confidence}% Match
-            </Badge>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyAngle}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-gray-700 mb-4">{angle.description}</p>
-        
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-medium text-gray-900 mb-2">Key Discussion Points:</h4>
-            <ul className="space-y-1">
-              {angle.keyPoints.map((point, index) => (
-                <li key={index} className="text-sm text-gray-600 flex items-start">
-                  <ChevronRight className="h-4 w-4 text-primary mr-1 mt-0.5 flex-shrink-0" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </div>
-          
-          <div className="pt-4 border-t">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-gray-900">Target Audience:</span>
-                <p className="text-gray-600">{angle.targetAudience}</p>
-              </div>
-              <div>
-                <span className="font-medium text-gray-900">Best For:</span>
-                <p className="text-gray-600">{angle.podcastTypes.join(', ')}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function InterviewQuestionCard({ 
-  question, 
-  value, 
-  onChange, 
-  error 
-}: { 
-  question: InterviewQuestion;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}) {
-  return (
-    <Card className="hover:shadow-sm transition-all">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-2">
-              <Badge variant={question.required ? "default" : "secondary"}>
-                {question.category}
-              </Badge>
-              {question.required && (
-                <Badge variant="destructive" className="text-xs">Required</Badge>
-              )}
-            </div>
-            <h3 className="font-medium text-gray-900 mt-2">{question.question}</h3>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Share your detailed response here..."
-          className={`min-h-[120px] ${error ? 'border-red-500' : ''}`}
-        />
-        {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-      </CardContent>
-    </Card>
-  );
+interface AnglesBioTriggerResponse {
+    campaign_id: string;
+    status: string; 
+    message: string;
+    details?: {
+        bio_doc_link?: string | null;
+        angles_doc_link?: string | null;
+        keywords?: string[] | null;
+    } | null;
 }
 
 export default function AnglesGenerator() {
-  const [currentStep, setCurrentStep] = useState<'interview' | 'angles'>('interview');
-  const [generatedAngles, setGeneratedAngles] = useState<GeneratedAngle[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<AnglesBioTriggerResponse['details']>(null);
   const { toast } = useToast();
+  const tanstackQueryClient = useTanstackQueryClient();
+  const { user, isLoading: authLoading } = useAuth();
 
-  const form = useForm<AngleGeneratorFormData>({
-    resolver: zodResolver(angleGeneratorSchema),
-    defaultValues: {
-      name: "",
-      title: "",
-      companyName: "",
-      socialLinks: {
-        linkedin: "",
-        twitter: "",
-        website: ""
-      },
-      existingPodcasts: "",
-      goal: "",
-      placementGoalNumber: 1,
-      interviewResponses: {},
-      pastEpisodeTranscripts: "",
-      featuredArticles: "",
-      socialPosts: "",
+  const { data: clientCampaigns = [], isLoading: isLoadingCampaigns } = useQuery<ClientCampaign[]>({
+    queryKey: ["clientCampaignsForAngles", user?.person_id],
+    queryFn: async () => {
+      if (!user?.person_id) return [];
+      const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
+      if (!response.ok) throw new Error("Failed to fetch client campaigns");
+      const campaigns: ClientCampaign[] = await response.json();
+      // Filter for campaigns that have a mock interview transcript, indicating questionnaire is likely filled.
+      return campaigns.filter(c => c.mock_interview_trancript && c.mock_interview_trancript.trim() !== "");
+    },
+    enabled: !!user?.person_id && !authLoading,
+  });
+  
+  const selectedCampaignDetails = clientCampaigns.find(c => c.campaign_id === selectedCampaignId);
+
+  const triggerAnglesBioMutation = useMutation({
+    mutationFn: async (campaignId: string): Promise<AnglesBioTriggerResponse> => {
+      const response = await apiRequest("POST", `/campaigns/${campaignId}/generate-angles-bio`, {});
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Failed to trigger generation."}));
+        throw new Error(errorData.detail);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === "success" && data.details) {
+        setGeneratedContent(data.details);
+        toast({ title: "Generation Successful", description: data.message });
+      } else {
+        setGeneratedContent(null); // Clear previous results if not successful
+        toast({ title: "Generation Info", description: data.message, variant: data.status === "error" ? "destructive" : "default" });
+      }
+      if (selectedCampaignId) {
+        tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForAngles", user?.person_id] }); // Refetch to update displayed campaign details
+        tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetails", selectedCampaignId] }); // If you have a query for single campaign details
+      }
+    },
+    onError: (error: any) => {
+      setGeneratedContent(null);
+      toast({ title: "Generation Failed", description: error.message || "Could not trigger angles/bio generation.", variant: "destructive" });
     },
   });
 
-  const generateAngles = async (data: AngleGeneratorFormData) => {
-    setIsGenerating(true);
-    
-    try {
-      // Simulate AI processing of interview responses
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Generate professional angles based on authentic content analysis
-      const angles: GeneratedAngle[] = [
-        {
-          id: "1",
-          title: "From R&D to Revenue: Overcoming the AI Implementation Gap",
-          description: "Help listeners learn actionable strategies to move AI projects from pilot phases to revenue-generating deployments, based on your real-world Fortune 500 experience.",
-          keyPoints: [
-            "Common pitfalls that prevent AI projects from scaling beyond pilot phases",
-            "Proven roadmap for successful AI implementation with measurable ROI",
-            "Real-world case studies from Fortune 500 transformations",
-            "Data quality and governance strategies that ensure AI success",
-            "Building stakeholder buy-in for AI initiatives across organizations"
-          ],
-          targetAudience: "C-suite executives, CTOs, and business leaders implementing AI",
-          podcastTypes: ["Business Technology", "AI/ML", "Digital Transformation", "Enterprise Strategy"],
-          confidence: 94
-        },
-        {
-          id: "2", 
-          title: "Building AI Guardrails: Ensuring Safety, Compliance, and Ethical Use",
-          description: "Share your expertise in responsible AI deployment, helping listeners understand how to build safety and compliance into AI systems from the ground up.",
-          keyPoints: [
-            "Critical principles of Responsible AI and bias mitigation strategies",
-            "Building governance frameworks that enable rather than restrict innovation",
-            "Real-time monitoring and regulatory compliance (EU AI Act, etc.)",
-            "Transparency and explainability in AI decision-making",
-            "Risk management frameworks for AI deployment at scale"
-          ],
-          targetAudience: "Risk managers, compliance officers, and responsible AI practitioners",
-          podcastTypes: ["AI Ethics", "RegTech", "Risk Management", "Corporate Governance"],
-          confidence: 91
-        },
-        {
-          id: "3",
-          title: "The Customer-Centric AI Revolution: 'Grokking' Your Way to Growth",
-          description: "Discuss how to deeply understand customer needs and use AI to create personalized experiences that drive engagement and loyalty, drawing from your upcoming book insights.",
-          keyPoints: [
-            "The concept of 'grokking' the customer for deeper understanding",
-            "Using AI to deliver personalized experiences at scale",
-            "Data-driven customer journey optimization strategies",
-            "Balancing automation with human touch in customer interactions",
-            "Practical go-to-market strategies for AI-powered customer solutions"
-          ],
-          targetAudience: "Marketing leaders, customer experience professionals, and growth strategists",
-          podcastTypes: ["Marketing Technology", "Customer Experience", "Growth Strategy", "SaaS"],
-          confidence: 89
-        }
-      ];
-      
-      setGeneratedAngles(angles);
-      setCurrentStep('angles');
-      
-      toast({
-        title: "Success!",
-        description: `Generated ${angles.length} personalized pitch angles based on your interview responses.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate angles. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
+  const handleGenerate = () => {
+    if (!selectedCampaignId) {
+      toast({ title: "Campaign Required", description: "Please select a campaign.", variant: "destructive" });
+      return;
     }
+    const campaign = clientCampaigns.find(c => c.campaign_id === selectedCampaignId);
+    if (!campaign || !campaign.mock_interview_trancript || campaign.mock_interview_trancript.trim() === "") {
+        toast({ title: "Questionnaire Needed", description: "The selected campaign needs a completed questionnaire (which populates the mock interview transcript) before generating angles/bio.", variant: "destructive" });
+        return;
+    }
+    setGeneratedContent(null); // Clear previous results
+    triggerAnglesBioMutation.mutate(selectedCampaignId);
   };
 
-  const onSubmit = async (data: AngleGeneratorFormData) => {
-    await generateAngles(data);
-  };
-
-  const restartInterview = () => {
-    setCurrentStep('interview');
-    setGeneratedAngles([]);
-    form.reset({ interviewResponses: {} });
-  };
-
-  const requiredQuestions = mockInterviewQuestions.filter(q => q.required);
-  const optionalQuestions = mockInterviewQuestions.filter(q => !q.required);
-
-  if (currentStep === 'angles') {
-    return (
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="text-center">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-primary" />
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-700">Generated Angles</h1>
-          <p className="text-gray-600 mt-2">
-            Based on your interview responses, here are personalized pitch angles for podcast outreach.
-          </p>
-          <Button
-            variant="outline"
-            onClick={restartInterview}
-            className="mt-4"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Create New Angles
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {generatedAngles.map((angle) => (
-            <AngleCard key={angle.id} angle={angle} />
-          ))}
-        </div>
-      </div>
-    );
+  if (authLoading || isLoadingCampaigns) {
+    return <div className="p-6 text-center"><Skeleton className="h-10 w-1/2 mx-auto mb-4" /><Skeleton className="h-64 w-full" /></div>;
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* <div className="text-center">
-        <div className="flex items-center justify-center mb-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Brain className="h-6 w-6 text-primary" />
-          </div>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-700">Angles Generator</h1>
-        <p className="text-gray-600 mt-2">
-          Complete this mock interview to generate personalized pitch angles for podcast outreach.
-        </p>
-      </div> */}
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center">
-          <MessageSquare className="h-5 w-5 text-blue-600 mr-2" />
-          <span className="text-blue-800 font-medium">Mock Interview Process</span>
-        </div>
-        <p className="text-blue-700 mt-2 text-sm">
-          Answer the questions below as if you're in a real interview. Our Agents will analyze your responses to create pitch angles that will highlight your unique expertise and brand story.
-        </p>
-      </div>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-
-          {/* Required Questions */}
+    <div className="max-w-4xl mx-auto space-y-6 p-4 md:p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-primary" />AI-Powered Bio & Angles Generator</CardTitle>
+          <CardDescription>
+            Select a campaign with a completed questionnaire. Our AI will analyze the information
+            to generate a compelling client bio and targeted pitch angles, saved as Google Docs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div>
-            <div className="flex items-center space-x-2 mb-6">
-              <CheckCircle className="h-5 w-5 text-red-500" />
-              <h2 className="text-xl font-semibold text-gray-800">Required Questions</h2>
-              <Badge variant="destructive">Must Complete</Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-6">
-              {requiredQuestions.map((question) => (
-                <FormField
-                  key={question.id}
-                  control={form.control}
-                  name={`interviewResponses.${question.id}`}
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormControl>
-                        <InterviewQuestionCard
-                          question={question}
-                          value={field.value || ""}
-                          onChange={field.onChange}
-                          error={fieldState.error?.message}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
-            </div>
+            <label htmlFor="campaign-select-angles" className="text-sm font-medium mb-2 block">
+              Select Campaign
+            </label>
+            {clientCampaigns.length === 0 && !isLoadingCampaigns ? (
+                <div className="p-4 border rounded-md bg-yellow-50 border-yellow-200 text-yellow-700 text-sm">
+                    <AlertTriangle className="inline h-4 w-4 mr-2" />
+                    No campaigns found with completed questionnaires. Please fill out the <Link href="/questionnaire" className="underline hover:text-yellow-800">questionnaire</Link> for a campaign first.
+                </div>
+            ) : (
+              <Select
+                value={selectedCampaignId || ""}
+                onValueChange={(value) => {
+                  setSelectedCampaignId(value === "none" ? null : value);
+                  setGeneratedContent(null);
+                }}
+              >
+                <SelectTrigger id="campaign-select-angles" disabled={isLoadingCampaigns}>
+                  <SelectValue placeholder="Choose a campaign..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" disabled>Choose a campaign...</SelectItem>
+                  {clientCampaigns.map((campaign) => (
+                    <SelectItem key={campaign.campaign_id} value={campaign.campaign_id}>
+                      {campaign.campaign_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {/* Optional Questions */}
-          <div>
-            <div className="flex items-center space-x-2 mb-6">
-              <Clock className="h-5 w-5 text-gray-500" />
-              <h2 className="text-xl font-semibold text-gray-800">Optional Questions</h2>
-              <Badge variant="secondary">Better Results</Badge>
+          {selectedCampaignDetails && (
+            <div className="p-3 border rounded-md bg-gray-50 text-xs text-gray-600 space-y-1">
+                <p><strong>Selected Campaign:</strong> {selectedCampaignDetails.campaign_name}</p>
+                <p>
+                    <strong>Questionnaire/Mock Interview Status:</strong> 
+                    {selectedCampaignDetails.mock_interview_trancript ? 
+                        <Badge variant="default" className="bg-green-100 text-green-700 ml-1">Ready for Generation</Badge> :
+                        <Badge variant="destructive" className="ml-1">Questionnaire Incomplete</Badge>
+                    }
+                </p>
+                {selectedCampaignDetails.campaign_bio && 
+                    <p><strong>Current Bio:</strong> <a href={selectedCampaignDetails.campaign_bio} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
+                {selectedCampaignDetails.campaign_angles && 
+                    <p><strong>Current Angles:</strong> <a href={selectedCampaignDetails.campaign_angles} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
             </div>
-            <p className="text-gray-600 text-sm mb-6">
-              Answering these questions will help generate more targeted and compelling pitch angles.
-            </p>
-            <div className="grid grid-cols-1 gap-6">
-              {optionalQuestions.map((question) => (
-                <FormField
-                  key={question.id}
-                  control={form.control}
-                  name={`interviewResponses.${question.id}`}
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormControl>
-                        <InterviewQuestionCard
-                          question={question}
-                          value={field.value || ""}
-                          onChange={field.onChange}
-                          error={fieldState.error?.message}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* Content Sources */}
-          <div>
-            <div className="flex items-center space-x-2 mb-6">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold text-gray-800">Content Sources</h2>
-              <Badge className="bg-primary/10 text-primary">AI Analysis</Badge>
-            </div>
-            <p className="text-gray-600 text-sm mb-6">
-              Provide your existing content for AI analysis. This helps generate angles based on your proven expertise and messaging.
-            </p>
-            
-            <div className="grid grid-cols-1 gap-6">
-              <FormField
-                control={form.control}
-                name="pastEpisodeTranscripts"
-                render={({ field }) => (
-                  <FormItem>
-                    <Card className="hover:shadow-sm transition-all">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-2">
-                          <MessageSquare className="h-5 w-5 text-primary" />
-                          <h3 className="font-medium text-gray-900">Past Episode Transcripts</h3>
-                          <Badge variant="outline" className="text-xs">High Impact</Badge>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          Paste transcripts from podcast episodes you've been featured on. Our AI will identify your best talking points and expertise areas.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Paste full transcripts from your previous podcast appearances here. Include host introductions, your responses, and any Q&A segments..."
-                            className="min-h-[150px] text-sm"
-                          />
-                        </FormControl>
-                      </CardContent>
-                    </Card>
-                  </FormItem>
-                )}
-              />
+          <Button 
+            onClick={handleGenerate} 
+            disabled={!selectedCampaignId || triggerAnglesBioMutation.isPending || !selectedCampaignDetails?.mock_interview_trancript}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 w-full md:w-auto"
+          >
+            {triggerAnglesBioMutation.isPending ? (
+              <><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Generating...</>
+            ) : (
+              <><Sparkles className="mr-2 h-4 w-4" />Generate Bio & Angles</>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
-              <FormField
-                control={form.control}
-                name="featuredArticles"
-                render={({ field }) => (
-                  <FormItem>
-                    <Card className="hover:shadow-sm transition-all">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-2">
-                          <Target className="h-5 w-5 text-primary" />
-                          <h3 className="font-medium text-gray-900">Featured Articles & Press</h3>
-                          <Badge variant="outline" className="text-xs">Expert Positioning</Badge>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          Include articles where you've been featured, quoted, or interviewed. This shows your media experience and key messages.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Paste content from articles, press releases, or media coverage featuring you. Include your quotes, bio descriptions, and any commentary about your work..."
-                            className="min-h-[150px] text-sm"
-                          />
-                        </FormControl>
-                      </CardContent>
-                    </Card>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="socialPosts"
-                render={({ field }) => (
-                  <FormItem>
-                    <Card className="hover:shadow-sm transition-all">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-2">
-                          <Brain className="h-5 w-5 text-primary" />
-                          <h3 className="font-medium text-gray-900">Social Media Posts</h3>
-                          <Badge variant="outline" className="text-xs">Authentic Voice</Badge>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          Copy your most engaging LinkedIn, Twitter, or other social posts. This captures your authentic voice and current interests.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Paste your most popular or representative social media posts. Include posts about industry insights, personal achievements, thought leadership, and professional updates..."
-                            className="min-h-[150px] text-sm"
-                          />
-                        </FormControl>
-                      </CardContent>
-                    </Card>
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-center pt-8">
-            <Button 
-              type="submit" 
-              size="lg"
-              disabled={isGenerating}
-              className="bg-primary text-white hover:bg-primary/90 px-8"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-                  Generating Angles...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Generate Pitch Angles
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </Form>
+      {triggerAnglesBioMutation.isSuccess && generatedContent && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Content for "{selectedCampaignDetails?.campaign_name}"</CardTitle>
+            <CardDescription>{triggerAnglesBioMutation.data?.message}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {generatedContent.bio_doc_link && (
+              <div>
+                <h3 className="font-semibold mb-1 text-gray-700">Generated Client Bio:</h3>
+                <a href={generatedContent.bio_doc_link} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80 flex items-center text-sm">
+                    <LinkIcon className="h-4 w-4 mr-1"/> View Bio Document
+                </a>
+              </div>
+            )}
+            {generatedContent.angles_doc_link && (
+              <div>
+                <h3 className="font-semibold mb-1 text-gray-700">Generated Pitch Angles:</h3>
+                <a href={generatedContent.angles_doc_link} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80 flex items-center text-sm">
+                    <LinkIcon className="h-4 w-4 mr-1"/> View Angles Document
+                </a>
+              </div>
+            )}
+            {generatedContent.keywords && generatedContent.keywords.length > 0 && (
+              <div>
+                <h3 className="font-semibold mb-1 text-gray-700">Generated Keywords:</h3>
+                <div className="flex flex-wrap gap-2">
+                    {generatedContent.keywords.map((kw, idx) => <Badge key={idx} variant="secondary" className="text-xs">{kw}</Badge>)}
+                </div>
+              </div>
+            )}
+            {!generatedContent.bio_doc_link && !generatedContent.angles_doc_link && (!generatedContent.keywords || generatedContent.keywords.length === 0) && (
+                <p className="text-sm text-gray-500">No specific content links or keywords were returned by the generation process, but it may have completed successfully. Check the campaign record for updates.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+       <Card className="bg-blue-50 border-blue-200 mt-8">
+        <CardHeader>
+            <CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>How Bio & Angles Generation Works</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-blue-600 space-y-2">
+            <p>1. First, ensure you have selected a campaign and completed its <Link href="/questionnaire" className="font-medium underline hover:text-blue-700">Questionnaire</Link>. This provides the core information (mock interview transcript) our AI needs.</p>
+            <p>2. Once a campaign with a completed questionnaire is selected, click the "Generate Bio & Angles" button.</p>
+            <p>3. Our AI system (<code>AnglesProcessorPG</code> on the backend) will analyze the mock interview transcript and other campaign details.</p>
+            <p>4. It will then generate:</p>
+            <ul className="list-disc list-inside pl-4">
+                <li>A comprehensive client bio (Full, Summary, Short versions).</li>
+                <li>A set of at least 10 potential pitch angles (Topic, Outcome, Description).</li>
+                <li>A list of relevant keywords for the campaign.</li>
+            </ul>
+            <p>5. The generated bio and angles will be saved as new Google Documents, and links to these documents will be stored in the campaign's record in the database. Keywords will also be saved to the campaign.</p>
+            <p>6. You will see links to the generated documents and the keywords on this page after successful generation.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
