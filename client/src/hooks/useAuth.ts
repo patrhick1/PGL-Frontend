@@ -1,20 +1,18 @@
 // client/src/hooks/useAuth.ts
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient"; // Use the updated getQueryFn
+import { getQueryFn } from "@/lib/queryClient";
 
-// Define the expected user structure from your Python backend's /auth/me
 interface AuthUser {
   username: string; // This is the email
   role: string | null;
-  person_id?: number | null;
-  full_name?: string | null;
-  // You can add an explicit email field if you prefer, though username already holds it
-  // email: string; 
+  person_id: number | null; // Changed from optional to match backend session data more closely
+  full_name: string | null; // Changed from optional
+  // profileImageUrl?: string; // Add if your backend /me returns this
 }
 
 export function useAuth() {
-  const { data: user, isLoading, error } = useQuery<AuthUser | null>({
-    queryKey: ["/auth/me"],
+  const { data: user, isLoading, error, isSuccess } = useQuery<AuthUser | null>({
+    queryKey: ["/auth/me"], // Corrected path to match backend auth.router
     queryFn: getQueryFn<AuthUser | null>({ on401: "returnNull" }), 
     retry: false,
     staleTime: 1000 * 60 * 5, 
@@ -22,9 +20,9 @@ export function useAuth() {
   });
 
   return {
-    user, // user.username will be the email
+    user,
     isLoading,
-    isAuthenticated: !!user && !error,
+    isAuthenticated: !!user && !error && isSuccess, // Ensure query was successful
     error,
   };
 }

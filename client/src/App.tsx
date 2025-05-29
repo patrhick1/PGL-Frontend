@@ -11,7 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import PodcastDiscovery from "@/pages/PodcastDiscovery";
 import Questionnaire from "@/pages/Questionnaire";
 import MediaKit from "@/pages/MediaKit";
-import PitchGenerator from "@/pages/PitchGenerator";
+import AnglesGenerator from "@/pages/AnglesGenerator";
 import ContentCreator from "@/pages/ContentCreator";
 import Approvals from "@/pages/Approvals";
 import PlacementTracking from "@/pages/PlacementTracking";
@@ -45,7 +45,7 @@ function Router() {
           <Route path="/questionnaire" component={Questionnaire} />
           <Route path="/content-creator" component={ContentCreator} />
           <Route path="/media-kit" component={MediaKit} />
-          <Route path="/angle-generator" component={PitchGenerator} />
+          <Route path="/angles-generator" component={AnglesGenerator} />
           <Route path="/approvals" component={Approvals} />
           <Route path="/placement-tracking" component={PlacementTracking} />
           <Route path="/admin" component={AdminPanel} />

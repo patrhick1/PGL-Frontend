@@ -46,10 +46,10 @@ export default function SignupPage() {
         full_name: data.full_name,
         email: data.email,
         password: data.password,
-        // role: "client" // Backend /register sets role to "client" by default
+        // role: "client" // Backend /auth/register sets role to "client" by default
       };
       // Assuming VITE_API_BASE_URL = http://localhost:8000
-      const response = await apiRequest("POST", "/register", payload);
+      const response = await apiRequest("POST", "/auth/register", payload);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Signup failed. Please try again." }));

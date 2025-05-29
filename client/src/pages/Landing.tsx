@@ -40,7 +40,7 @@ export default function Landing() {
       formData.append("password", password);
 
       // Assuming VITE_API_BASE_URL = http://localhost:8000
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/token`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -58,7 +58,7 @@ export default function Landing() {
       // console.log("Login successful, response data:", responseData); // For debugging
 
       toast({ title: "Login Successful", description: "Redirecting to dashboard..." });
-      await queryClient.invalidateQueries({ queryKey: ["/me"] }); // Corrected queryKey
+      await queryClient.invalidateQueries({ queryKey: ["/auth/me"] }); // Corrected queryKey
       // The useAuth hook will pick up the new auth state, and App.tsx router will redirect.
       // Explicit navigation might still be good for immediate feedback.
       navigate("/", { replace: true });

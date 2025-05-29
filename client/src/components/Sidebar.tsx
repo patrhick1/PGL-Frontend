@@ -41,7 +41,7 @@ export default function Sidebar() {
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/auth/logout", {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/auth/me"] });
       queryClient.clear();
       setLocation("/login", { replace: true });
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
