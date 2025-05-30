@@ -105,15 +105,15 @@ export default function Sidebar() {
     return null; 
   }
 
-  const userRole = user.role;
+  const userRoleLower = user.role?.toLowerCase(); // Convert to lowercase for comparisons
 
   let currentNavigation: NavigationItem[];
-  if (userRole === 'client') {
+  if (userRoleLower === 'client') {
     currentNavigation = clientNavigationItems;
-  } else if (userRole === 'staff' || userRole === 'admin') {
+  } else if (userRoleLower === 'staff' || userRoleLower === 'admin') {
     // Filter items based on the specific staff/admin role
     currentNavigation = internalNavigationItems.filter(item => 
-        !item.roles || item.roles.includes(userRole as 'staff' | 'admin')
+        !item.roles || item.roles.includes(userRoleLower as 'staff' | 'admin')
     );
   } else {
     currentNavigation = []; // Should not happen for authenticated users with known roles
@@ -121,7 +121,7 @@ export default function Sidebar() {
   
   // Filter account navigation based on role (though currently "Settings" is for all)
   const currentAccountNavigation = accountNavigationItems.filter(item => 
-    !item.roles || item.roles.includes(userRole as 'client' | 'staff' | 'admin')
+    !item.roles || item.roles.includes(userRoleLower as 'client' | 'staff' | 'admin')
   );
 
   return (
@@ -138,7 +138,7 @@ export default function Sidebar() {
       <nav className="flex-1 flex flex-col justify-between overflow-y-auto">
         <div className="px-3 py-4">
           <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            {userRole === 'client' ? 'Client Menu' : 'Team Menu'}
+            {userRoleLower === 'client' ? 'Client Menu' : 'Team Menu'}
           </p>
           <ul className="space-y-1.5">
             {currentNavigation.map((item) => {
@@ -149,19 +149,18 @@ export default function Sidebar() {
               
               return (
                 <li key={item.name}>
-                  <Link href={item.href}>
-                    <a
-                      className={`
-                        group flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-colors duration-150 ease-in-out
-                        ${isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        }
-                      `}
-                    >
-                      <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-foreground' : 'text-gray-500 group-hover:text-sidebar-accent-foreground'}`} />
-                      {item.name}
-                    </a>
+                  <Link
+                    href={item.href}
+                    className={`
+                      group flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-colors duration-150 ease-in-out
+                      ${isActive
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }
+                    `}
+                  >
+                    <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-foreground' : 'text-gray-500 group-hover:text-sidebar-accent-foreground'}`} />
+                    {item.name}
                   </Link>
                 </li>
               );
@@ -178,19 +177,18 @@ export default function Sidebar() {
               
               return (
                 <li key={item.name}>
-                  <Link href={item.href}>
-                    <a
-                      className={`
-                        group flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-colors duration-150 ease-in-out
-                        ${isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        }
-                      `}
-                    >
-                      <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-foreground' : 'text-gray-500 group-hover:text-sidebar-accent-foreground'}`} />
-                      {item.name}
-                    </a>
+                  <Link
+                    href={item.href}
+                    className={`
+                      group flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-colors duration-150 ease-in-out
+                      ${isActive
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }
+                    `}
+                  >
+                    <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-foreground' : 'text-gray-500 group-hover:text-sidebar-accent-foreground'}`} />
+                    {item.name}
                   </Link>
                 </li>
               );

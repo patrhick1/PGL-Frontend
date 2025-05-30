@@ -35,6 +35,7 @@ import SignupPage from "@/pages/Signup";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const userRoleLower = user?.role?.toLowerCase(); // Get lowercase role
 
   if (isLoading) {
     return (
@@ -46,7 +47,7 @@ function Router() {
   }
 
   return (
-    <Switch>
+    <Switch> {/* Outer Switch for auth state */}
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
@@ -59,45 +60,47 @@ function Router() {
         </>
       ) : (
         <Layout> {/* Layout includes Sidebar and Header */}
-          {/* Common Routes for all authenticated users */}
-          <Route path="/" component={Dashboard} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/placement-tracking" component={PlacementTracking} />
-          <Route path="/approvals" component={Approvals} /> 
-          {/* Approvals page will internally handle data/UI based on user.role */}
+          <Switch> {/* <<< NESTED SWITCH for authenticated routes */}
+            {/* Common Routes for all authenticated users */}
+            <Route path="/" component={Dashboard} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/placement-tracking" component={PlacementTracking} />
+            <Route path="/approvals" component={Approvals} /> 
+            {/* Approvals page will internally handle data/UI based on user.role */}
 
 
-          {/* Client-Specific Routes */}
-          {user?.role === 'client' && (
-            <>
-              <Route path="/my-campaigns" component={ClientCampaigns} />
-              <Route path="/my-campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
-              <Route path="/profile-setup" component={ProfileSetup} />
-              <Route path="/discover" component={PodcastDiscovery} /> {/* Client's limited discovery */}
-            </>
-          )}
+            {/* Client-Specific Routes */}
+            {userRoleLower === 'client' && (
+              <>
+                <Route path="/my-campaigns" component={ClientCampaigns} />
+                <Route path="/my-campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
+                <Route path="/profile-setup" component={ProfileSetup} />
+                <Route path="/discover" component={PodcastDiscovery} /> {/* Client's limited discovery */}
+              </>
+            )}
 
-          {/* Internal Staff/Admin Routes */}
-          {(user?.role === 'staff' || user?.role === 'admin') && (
-            <>
-              {/* Dashboard for staff might be the same component but fetch different data based on role */}
-              <Route path="/campaign-management" component={CampaignManagement} />
-              <Route path="/manage/campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
-              <Route path="/discover" component={PodcastDiscovery} /> {/* Staff's full discovery */}
-              <Route path="/pitch-outreach" component={PitchOutreach} />
-            </>
-          )}
+            {/* Internal Staff/Admin Routes */}
+            {(userRoleLower === 'staff' || userRoleLower === 'admin') && (
+              <>
+                {/* Dashboard for staff might be the same component but fetch different data based on role */}
+                <Route path="/campaign-management" component={CampaignManagement} />
+                <Route path="/manage/campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
+                <Route path="/discover" component={PodcastDiscovery} /> {/* Staff's full discovery */}
+                <Route path="/pitch-outreach" component={PitchOutreach} />
+              </>
+            )}
 
-          {/* Admin-Only Routes */}
-          {user?.role === 'admin' && (
-            <Route path="/admin" component={AdminPanel} />
-          )}
-          
-          {/* Fallback for authenticated users if no specific route matches their role or path */}
-          {/* This ensures that if an authenticated user lands on a non-defined path, they go to their dashboard */}
-          <Route path="/:rest*">
-            <Redirect to="/" replace />
-          </Route>
+            {/* Admin-Only Routes */}
+            {userRoleLower === 'admin' && (
+              <Route path="/admin" component={AdminPanel} />
+            )}
+            
+            {/* Fallback for authenticated users if no specific route matches their role or path */}
+            {/* This ensures that if an authenticated user lands on a non-defined path, they go to their dashboard */}
+            <Route path="/:rest*">
+              <Redirect to="/" replace />
+            </Route>
+          </Switch> {/* <<< END NESTED SWITCH */}
         </Layout>
       )}
       {/* Final catch-all for any route not handled above (e.g. if Layout itself is part of a non-matched authenticated route) */}
