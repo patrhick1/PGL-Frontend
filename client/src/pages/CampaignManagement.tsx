@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ClientsIcon, Plus, Edit, Trash2, Search, ArrowRight } from "lucide-react";
+import { Users as ClientsIcon, Plus, Edit, Trash2, Search, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 // Import CreateCampaignDialog and EditCampaignDialog from AdminPanel.tsx or a shared components dir

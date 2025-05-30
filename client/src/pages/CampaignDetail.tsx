@@ -1,6 +1,6 @@
 // client/src/pages/CampaignDetail.tsx
 import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query";
-import { useParams, Link, useLocation } from "wouter";
+import { useParams, Link, useLocation } from "wouter"; // useParams is not used if campaignIdParam is passed directly
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator"; // Added Separator
 
 // --- Interfaces (Ensure these match your actual backend responses) ---
 interface CampaignDetailData {
@@ -44,6 +45,7 @@ interface MatchSuggestionForCampaign {
 interface PitchForCampaign { // Simplified from PitchInDB
   pitch_id: number;
   pitch_gen_id?: number | null;
+  media_id: number; // Added media_id for fetching media details if needed
   media_name?: string | null; // Joined from media table
   subject_line?: string | null;
   pitch_state?: string | null; // e.g., 'generated', 'pending_review', 'ready_to_send', 'sent', 'opened', 'replied'
@@ -54,6 +56,7 @@ interface PitchForCampaign { // Simplified from PitchInDB
 
 interface PlacementForCampaign { // Simplified from PlacementInDB
   placement_id: number;
+  media_id: number; // Added media_id for fetching media details if needed
   media_name?: string | null; // Joined from media table
   current_status?: string | null;
   go_live_date?: string | null;
@@ -61,6 +64,11 @@ interface PlacementForCampaign { // Simplified from PlacementInDB
   created_at: string;
 }
 // --- End Interfaces ---
+
+// --- Define the props for CampaignDetail ---
+interface CampaignDetailProps {
+  campaignIdParam: string; // Expect this prop
+}
 
 
 // --- Tab Content Components (Can be moved to separate files) ---
@@ -77,11 +85,11 @@ function CampaignOverviewTab({ campaign }: { campaign: CampaignDetailData }) {
         <p><strong>Client:</strong> {campaign.client_full_name || `Person ID: ${campaign.person_id}`}</p>
         <p><strong>Campaign Type:</strong> {campaign.campaign_type || "N/A"}</p>
         <p><strong>Keywords:</strong> {(campaign.campaign_keywords || []).join(', ') || "Not set"}</p>
-        <p><strong>Media Kit URL:</strong> 
-          {campaign.media_kit_url ? 
+        <p><strong>Media Kit URL:</strong>
+          {campaign.media_kit_url ?
             <a href={campaign.media_kit_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
               View Media Kit <ExternalLink className="inline h-3 w-3"/>
-            </a> 
+            </a>
             : " Not provided"}
         </p>
         <p><strong>Created:</strong> {new Date(campaign.created_at).toLocaleDateString()}</p>
@@ -115,7 +123,7 @@ function ProfileContentTab({ campaign, userRole }: { campaign: CampaignDetailDat
   });
 
   const handleGenerateBioAngles = () => {
-    if (!campaign.mock_interview_trancript && !campaign.questionnaire_responses) { // Check both
+    if (!campaign.mock_interview_trancript && !campaign.questionnaire_responses) {
         toast({ title: "Missing Prerequisite", description: "Questionnaire must be completed first to provide content for AI.", variant: "destructive"});
         if (userRole === 'client') navigate(`/profile-setup?campaignId=${campaign.campaign_id}&tab=questionnaire`);
         return;
@@ -123,7 +131,7 @@ function ProfileContentTab({ campaign, userRole }: { campaign: CampaignDetailDat
     triggerAnglesBioMutation.mutate(campaign.campaign_id);
   };
 
-  const questionnaireLink = userRole === 'client' ? `/profile-setup?campaignId=${campaign.campaign_id}&tab=questionnaire` : `/admin?tab=campaigns&action=editQuestionnaire&campaignId=${campaign.campaign_id}`; // Admin might edit via a different interface
+  const questionnaireLink = userRole === 'client' ? `/profile-setup?campaignId=${campaign.campaign_id}&tab=questionnaire` : `/admin?tab=campaigns&action=editQuestionnaire&campaignId=${campaign.campaign_id}`;
 
   return (
     <Card>
@@ -164,7 +172,7 @@ function ProfileContentTab({ campaign, userRole }: { campaign: CampaignDetailDat
             </a>
           ) : <p className="text-sm text-gray-500">Not generated yet. Complete questionnaire and click below.</p>}
         </div>
-        
+
         {(userRole === 'staff' || userRole === 'admin') && (
           <Button onClick={handleGenerateBioAngles} disabled={triggerAnglesBioMutation.isPending || (!campaign.questionnaire_responses && !campaign.mock_interview_trancript)}>
             <Lightbulb className="mr-2 h-4 w-4" />
@@ -190,26 +198,36 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
     queryFn: async () => {
       const response = await apiRequest("GET", `/match-suggestions/campaign/${campaignId}`);
       if (!response.ok) throw new Error("Failed to fetch match suggestions");
-      return response.json();
+      const matchData: any[] = await response.json();
+      // Enrich with media name if not already joined by backend
+      return Promise.all(matchData.map(async (m: any) => {
+          if (m.media_id && !m.media_name) { // Check if media_name is missing
+              try {
+                const mediaRes = await apiRequest("GET", `/media/${m.media_id}`);
+                if (mediaRes.ok) {
+                    const mediaDetails = await mediaRes.json();
+                    m.media_name = mediaDetails.name;
+                    m.media_website = mediaDetails.website;
+                }
+              } catch (e) { console.warn(`Could not fetch media details for media_id ${m.media_id}`); }
+          }
+          return m as MatchSuggestionForCampaign;
+      }));
     },
   });
-  
+
   const approveMatchMutation = useMutation({
-    mutationFn: (matchId: number) => apiRequest("PATCH", `/review-tasks/match-approval/${matchId}`), // Assuming a dedicated endpoint or adapt /review-tasks/
-    // OR if client directly approves the match_suggestion:
-    // mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}/approve`),
+    mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}/approve`),
     onSuccess: () => {
       toast({ title: "Match Approved", description: "The match has been approved. Our team will draft a pitch." });
       tanstackQueryClient.invalidateQueries({ queryKey: ["campaignMatchesDetail", campaignId] });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] }); // For staff queue
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message || "Failed to approve match.", variant: "destructive" }),
   });
 
   const rejectMatchMutation = useMutation({
-    mutationFn: (matchId: number) => apiRequest("PATCH", `/review-tasks/match-rejection/${matchId}`), // Assuming a dedicated endpoint
-    // OR:
-    // mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}`, { status: 'rejected_by_client' }),
+    mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}`, { status: 'rejected_by_client' }), // Example: update status directly
     onSuccess: () => {
       toast({ title: "Match Rejected", description: "The match has been marked as rejected." });
       tanstackQueryClient.invalidateQueries({ queryKey: ["campaignMatchesDetail", campaignId] });
@@ -250,7 +268,7 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
                   </div>
                   <div className="flex space-x-2 flex-shrink-0">
                     {match.media_website && <Button variant="ghost" size="sm" asChild><a href={match.media_website} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4"/></a></Button>}
-                    {(userRole === 'client' && match.status === 'pending') && ( // Client approves 'pending' matches
+                    {(userRole === 'client' && match.status === 'pending') && (
                       <>
                         <Button size="sm" onClick={() => approveMatchMutation.mutate(match.match_id)} disabled={approveMatchMutation.isPending} className="bg-green-500 hover:bg-green-600 text-white">
                             <ThumbsUp className="h-4 w-4 mr-1"/> Approve
@@ -278,14 +296,15 @@ function PitchesTab({ campaignId, userRole }: { campaignId: string; userRole: st
   const { data: pitches = [], isLoading, error } = useQuery<PitchForCampaign[]>({
     queryKey: ["campaignPitches", campaignId],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/pitches/?campaign_id=${campaignId}`); // Ensure backend supports this filter
+      const response = await apiRequest("GET", `/pitches/?campaign_id=${campaignId}`);
       if (!response.ok) throw new Error("Failed to fetch pitches");
       const pitchData: any[] = await response.json();
-      // Enrich with media name if not already joined by backend
       return Promise.all(pitchData.map(async p => {
           if (p.media_id && !p.media_name) {
-              const mediaRes = await apiRequest("GET", `/media/${p.media_id}`);
-              if (mediaRes.ok) p.media_name = (await mediaRes.json()).name;
+              try {
+                const mediaRes = await apiRequest("GET", `/media/${p.media_id}`);
+                if (mediaRes.ok) p.media_name = (await mediaRes.json()).name;
+              } catch (e) { console.warn(`Could not fetch media details for pitch's media_id ${p.media_id}`); }
           }
           return p;
       }));
@@ -330,11 +349,13 @@ function PlacementsTab({ campaignId, userRole }: { campaignId: string; userRole:
     queryFn: async () => {
       const response = await apiRequest("GET", `/placements/?campaign_id=${campaignId}`);
       if (!response.ok) throw new Error("Failed to fetch placements");
-      const placementData: any[] = (await response.json()).items || []; // Assuming paginated response
+      const placementData: any[] = (await response.json()).items || [];
        return Promise.all(placementData.map(async p => {
           if (p.media_id && !p.media_name) {
-              const mediaRes = await apiRequest("GET", `/media/${p.media_id}`);
-              if (mediaRes.ok) p.media_name = (await mediaRes.json()).name;
+              try {
+                const mediaRes = await apiRequest("GET", `/media/${p.media_id}`);
+                if (mediaRes.ok) p.media_name = (await mediaRes.json()).name;
+              } catch (e) { console.warn(`Could not fetch media details for placement's media_id ${p.media_id}`); }
           }
           return p;
       }));
@@ -354,7 +375,7 @@ function PlacementsTab({ campaignId, userRole }: { campaignId: string; userRole:
               <Card key={placement.placement_id} className="p-3">
                 <p className="font-medium text-sm">{placement.media_name || `Media ID: ${placement.media_id}`}</p>
                 <p className="text-xs">Status: <Badge>{placement.current_status || "N/A"}</Badge></p>
-                {placement.go_live_date && <p className="text-xs text-gray-500">Go-Live: {new Date(placement.go_live_date  + 'T00:00:00').toLocaleDateString()}</p>}
+                {placement.go_live_date && <p className="text-xs text-gray-500">Go-Live: {new Date(placement.go_live_date + 'T00:00:00').toLocaleDateString()}</p>}
                 {placement.episode_link && <a href={placement.episode_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Listen to Episode <PlayCircle className="inline h-3 w-3"/></a>}
                 {userRole !== 'client' && (
                     <Link href={`/placement-tracking?placementId=${placement.placement_id}`}>
@@ -372,11 +393,10 @@ function PlacementsTab({ campaignId, userRole }: { campaignId: string; userRole:
 
 
 // --- Main CampaignDetail Component ---
-export default function CampaignDetail() {
-  const params = useParams();
-  const campaignId = params.campaignId;
+export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps) { // Use the prop
+  const campaignId = campaignIdParam; // Use the passed prop
   const { user, isLoading: authLoading } = useAuth();
-  const tanstackQueryClient = useTanstackQueryClient(); // For potential mutations within tabs
+  const tanstackQueryClient = useTanstackQueryClient();
 
   const { data: campaign, isLoading, error } = useQuery<CampaignDetailData>({
     queryKey: ["campaignDetail", campaignId],
@@ -389,7 +409,6 @@ export default function CampaignDetail() {
         throw new Error(errorData.detail);
       }
       const campaignData: CampaignDetailData = await response.json();
-      // Fetch client name if not already part of campaignData
       if (campaignData.person_id && !campaignData.client_full_name) {
           try {
             const personRes = await apiRequest("GET", `/people/${campaignData.person_id}`);
@@ -401,19 +420,19 @@ export default function CampaignDetail() {
       }
       return campaignData;
     },
-    enabled: !!campaignId && !authLoading && !!user, // Ensure user is loaded before fetching campaign
+    enabled: !!campaignId && !authLoading && !!user,
   });
 
   if (authLoading || isLoading) {
     return (
       <div className="space-y-4 p-4 md:p-6 animate-pulse">
-        <Skeleton className="h-8 w-1/4 mb-4" /> {/* Back button */}
+        <Skeleton className="h-8 w-1/4 mb-4" />
         <div className="flex justify-between items-center">
-            <Skeleton className="h-10 w-1/2" /> {/* Title */}
-            <Skeleton className="h-10 w-32" /> {/* Action button */}
+            <Skeleton className="h-10 w-1/2" />
+            <Skeleton className="h-10 w-32" />
         </div>
-        <Skeleton className="h-10 w-full mb-4" /> {/* TabsList */}
-        <Skeleton className="h-64 w-full" /> {/* Tab content area */}
+        <Skeleton className="h-10 w-full mb-4" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -448,7 +467,6 @@ export default function CampaignDetail() {
     );
   }
 
-  // Determine back link based on role
   const backLink = user?.role === 'client' ? "/my-campaigns" : "/campaign-management";
 
   return (
@@ -458,7 +476,7 @@ export default function CampaignDetail() {
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Campaigns List
         </Button>
       </Link>
-      
+
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{campaign.campaign_name}</h1>

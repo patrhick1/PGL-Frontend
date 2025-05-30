@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FolderOpen, ArrowRight, AlertTriangle } from "lucide-react"; // Added AlertTriangle
+import { FolderOpen, ArrowRight, AlertTriangle, TrendingUp } from "lucide-react"; // Added TrendingUp and AlertTriangle
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,10 +18,8 @@ interface ClientCampaignSummary {
   campaign_type?: string | null;
   created_at: string; // ISO datetime string
   // Optional summary stats you might add in the backend for this view:
-  active_placements_count?: number; 
+  active_placements_count?: number;
   pending_approvals_count?: number; // Number of match_suggestions or pitch_reviews pending client approval
-  // Add client_name if your backend doesn't join it but you want to display it (though for "My Campaigns" it's implicit)
-  // client_full_name?: string; 
 }
 
 export default function ClientCampaigns() {
@@ -32,8 +30,6 @@ export default function ClientCampaigns() {
     queryKey: ["clientCampaignsList", user?.person_id], // Query key includes person_id for caching specific to user
     queryFn: async () => {
       if (!user?.person_id) {
-        // This case should ideally not be reached if `enabled` is working correctly,
-        // but it's a good safeguard.
         console.warn("ClientCampaigns: No person_id available for fetching campaigns.");
         return [];
       }
@@ -49,7 +45,7 @@ export default function ClientCampaigns() {
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 
-  if (authLoading || (campaignsLoading && !campaigns.length)) { // Show detailed loading if campaigns are loading for the first time
+  if (authLoading || (campaignsLoading && !campaigns.length && !error)) { // Show detailed loading if campaigns are loading for the first time and no error
     return (
       <div className="space-y-6 p-4 md:p-6 animate-pulse">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
