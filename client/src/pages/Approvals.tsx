@@ -425,14 +425,25 @@ export default function Approvals() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [taskTypeFilter, setTaskTypeFilter] = useState<"all" | "match_suggestion" | "pitch_review">("all");
 
-  const { data: reviewTasksData, isLoading, error } = useQuery<ReviewTask[]>({
+  // Define the expected structure of the paginated API response for review tasks
+  interface PaginatedReviewTasks {
+    items: ReviewTask[];
+    total: number;
+    page: number;
+    size: number;
+    pages?: number; // Optional, as not all paginated responses might include this
+  }
+
+  const { data: reviewTasksData, isLoading, error } = useQuery<PaginatedReviewTasks>({
     queryKey: ["/review-tasks/", { 
       status: statusFilter === "all" ? undefined : statusFilter, 
       task_type: taskTypeFilter === "all" ? undefined : taskTypeFilter 
+      // Add page and size parameters here if you implement pagination for this view
     }],
+    // queryFn is implicitly handled by your global queryClient setup if using defaultQueryFn
   });
   
-  const reviewTasks = reviewTasksData || [];
+  const reviewTasks = reviewTasksData?.items || []; // Correctly access the items array
 
   const displayedTasks = reviewTasks.filter((task: ReviewTask) => {
     if (!searchTerm) return true;
