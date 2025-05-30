@@ -7,7 +7,19 @@ interface AuthUser {
   role: string | null;
   person_id: number | null; // Changed from optional to match backend session data more closely
   full_name: string | null; // Changed from optional
-  // profileImageUrl?: string; // Add if your backend /me returns this
+  // Fields from Person schema / settings page
+  bio?: string | null;
+  website?: string | null;
+  location?: string | null;
+  timezone?: string | null;
+  linkedin_profile_url?: string | null;
+  twitter_profile_url?: string | null;
+  instagram_profile_url?: string | null;
+  tiktok_profile_url?: string | null;
+  dashboard_username?: string | null;
+  profileImageUrl?: string | null; // Was already commented, making it active
+  notification_settings?: Record<string, any> | null; // Assuming object, adjust if different
+  privacy_settings?: Record<string, any> | null;    // Assuming object, adjust if different
 }
 
 export function useAuth() {
