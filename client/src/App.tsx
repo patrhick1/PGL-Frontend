@@ -20,11 +20,13 @@ import ClientCampaigns from "@/pages/ClientCampaigns";
 import ProfileSetup from "@/pages/ProfileSetup"; // Replaces direct Questionnaire & MediaKit for clients
 import Approvals from "@/pages/Approvals"; // UI/data adapts based on role
 import PodcastDiscovery from "@/pages/PodcastDiscovery"; // UI/data adapts based on role
+import MediaDetail from "@/pages/MediaDetail"; // Import the new page
 
 // Staff/Admin-Specific
 import CampaignManagement from "@/pages/CampaignManagement";
 import PitchOutreach from "@/pages/PitchOutreach";
 import AdminPanel from "@/pages/AdminPanel"; // Admin only
+import PitchTemplatesPage from "@/pages/PitchTemplates"; // Added for Phase 5
 
 // Shared Detail Page
 import CampaignDetail from "@/pages/CampaignDetail";
@@ -76,6 +78,7 @@ function Router() {
                 <Route path="/my-campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
                 <Route path="/profile-setup" component={ProfileSetup} />
                 <Route path="/discover" component={PodcastDiscovery} /> {/* Client's limited discovery */}
+                <Route path="/media/:mediaId" component={MediaDetail} /> {/* Add new route */}
               </>
             )}
 
@@ -87,6 +90,7 @@ function Router() {
                 <Route path="/manage/campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
                 <Route path="/discover" component={PodcastDiscovery} /> {/* Staff's full discovery */}
                 <Route path="/pitch-outreach" component={PitchOutreach} />
+                <Route path="/pitch-templates" component={PitchTemplatesPage} /> {/* Added for Phase 5 */}
               </>
             )}
 

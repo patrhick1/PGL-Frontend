@@ -1,5 +1,5 @@
 // client/src/pages/AdminPanel.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,12 @@ import { z } from "zod";
 import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Users, Plus, Edit, Trash2, KeyRound, Search, Briefcase, Settings as SettingsIcon, Eye, EyeOff, CheckCircle, LinkIcon
+  Users, Plus, Edit, Trash2, KeyRound, Search, Briefcase, Settings as SettingsIcon, Eye, EyeOff, CheckCircle, LinkIcon, RefreshCw
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CreateCampaignDialog, { PersonForClientSelection as PersonForCampaignDialogs } from "@/components/dialogs/CreateCampaignDialog";
+import EditCampaignDialog from "@/components/dialogs/EditCampaignDialog";
 
 
 // --- Person Schemas (Align with backend: podcast_outreach/api/schemas/person_schemas.py) ---
@@ -114,14 +116,18 @@ interface Campaign {
   person_id: number;
   campaign_name: string;
   campaign_type?: string | null;
-  campaign_bio?: string | null;
-  campaign_angles?: string | null;
-  campaign_keywords?: string[] | null;
+  campaign_bio?: string | null;       // Link to GDoc
+  campaign_angles?: string | null;    // Link to GDoc
+  campaign_keywords?: string[] | null; // Consolidated keywords
+  embedding_status?: string | null; // Added
   mock_interview_trancript?: string | null;
   media_kit_url?: string | null;
   goal_note?: string | null;
   instantly_campaign_id?: string | null;
   created_at: string;
+  embedding_ready?: boolean; // NEW - Placeholder for embedding status (e.g., true if embedding exists)
+  // Potentially add client_name if needed for display and not easily joinable in all contexts
+  client_name?: string;
 }
 
 // --- Create Person Dialog ---
@@ -157,7 +163,10 @@ function CreatePersonDialog({ onSuccess }: { onSuccess: () => void }) {
         <Button><Plus className="h-4 w-4 mr-2" />Create Person</Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Create New Person</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Create New Person</DialogTitle>
+          <DialogDescription>Fill in the form below to add a new person to the system.</DialogDescription>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(data => createPersonMutation.mutate(data))} className="space-y-4">
             <FormField control={form.control} name="full_name" render={({ field }) => (
@@ -228,7 +237,10 @@ function EditPersonDialog({ person, open, onOpenChange, onSuccess }: { person: P
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Edit Person: {person.full_name || person.email}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Edit Person: {person.full_name || person.email}</DialogTitle>
+          <DialogDescription>Edit the details for this person.</DialogDescription>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(data => editPersonMutation.mutate(data))} className="space-y-4">
             <FormField control={form.control} name="full_name" render={({ field }) => (
@@ -289,7 +301,10 @@ function SetPasswordDialog({ personId, personName, open, onOpenChange, onSuccess
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Set Password for {personName || `Person ID: ${personId}`}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Set Password for {personName || `Person ID: ${personId}`}</DialogTitle>
+          <DialogDescription>Enter and confirm the new password for this user.</DialogDescription>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(data => setPasswordMutation.mutate({ password: data.password }))} className="space-y-4">
             <FormField control={form.control} name="password" render={({ field }) => (
@@ -395,194 +410,14 @@ function PeopleTable({ people, onEditPerson, onDeletePerson, onSetPassword }: {
   );
 }
 
-// --- Create Campaign Dialog ---
-function CreateCampaignDialog({ people, onSuccess }: { people: Person[]; onSuccess: () => void }) {
-  const [open, setOpen] = useState(false);
-  const { toast } = useToast();
-
-  const form = useForm<CampaignCreateFormInput>({ 
-    resolver: zodResolver(campaignCreateSchema), 
-    defaultValues: {
-      campaign_name: "",
-      campaign_type: "",
-      campaign_keywords_str: "", 
-      mock_interview_trancript: "",
-      media_kit_url: "",
-      goal_note: "",
-      instantly_campaign_id: ""
-    }
-  });
-
-  const createCampaignMutation = useMutation({
-    mutationFn: (data: CampaignCreatePayload) => { 
-        return apiRequest("POST", "/campaigns/", data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Campaign created successfully." });
-      form.reset(); setOpen(false); onSuccess();
-    },
-    onError: (error: any) => {
-      toast({ title: "Error Creating Campaign", description: error.message || "Failed to create campaign.", variant: "destructive" });
-    }
-  });
-  
-  const onSubmit = (formData: CampaignCreateFormInput) => {
-    createCampaignMutation.mutate(formData as any); 
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4 mr-2" />Create Campaign</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Create New Campaign</DialogTitle></DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="person_id" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Client (Person)</FormLabel>
-                <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    {people.filter(p => p.role === 'client').map(p => (
-                      <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_name" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input placeholder="Q4 SaaS Outreach" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_type" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Type (Optional)</FormLabel><FormControl><Input placeholder="B2B Tech" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
-              <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input placeholder="AI, SaaS, growth" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
-              <FormItem><FormLabel>Mock Interview Transcript/Link (Optional)</FormLabel><FormControl><Textarea placeholder="Paste transcript or GDoc link..." {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="media_kit_url" render={({ field }) => (
-              <FormItem><FormLabel>Media Kit URL (Optional)</FormLabel><FormControl><Input placeholder="https://link.to/mediakit" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
-              <FormItem><FormLabel>Instantly Campaign ID (Optional)</FormLabel><FormControl><Input placeholder="Instantly.ai campaign ID" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={createCampaignMutation.isPending}>
-                {createCampaignMutation.isPending ? "Creating..." : "Create Campaign"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// --- Edit Campaign Dialog ---
-function EditCampaignDialog({ campaign, people, open, onOpenChange, onSuccess }: { campaign: Campaign | null; people: Person[]; open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
-  const { toast } = useToast();
-  const form = useForm<CampaignUpdateFormInput>({ 
-    resolver: zodResolver(campaignUpdateSchema), 
-    defaultValues: {}, 
-  });
-
-  useEffect(() => {
-    if (campaign && open) {
-      form.reset({
-        person_id: campaign.person_id,
-        campaign_name: campaign.campaign_name,
-        campaign_type: campaign.campaign_type || "", 
-        campaign_keywords_str: (campaign.campaign_keywords || []).join(', '), 
-        mock_interview_trancript: campaign.mock_interview_trancript || "",
-        media_kit_url: campaign.media_kit_url || "",
-        goal_note: campaign.goal_note || "",
-        instantly_campaign_id: campaign.instantly_campaign_id || "",
-      });
-    }
-  }, [campaign, form, open]);
-
-  const editCampaignMutation = useMutation({
-    mutationFn: (data: CampaignUpdatePayload) => { 
-      return apiRequest("PUT", `/campaigns/${campaign!.campaign_id}`, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Campaign updated successfully." });
-      onOpenChange(false); onSuccess();
-    },
-    onError: (error: any) => {
-      toast({ title: "Error Updating Campaign", description: error.message || "Failed to update campaign.", variant: "destructive" });
-    }
-  });
-  
-  const onEditSubmit = (formData: CampaignUpdateFormInput) => {
-      editCampaignMutation.mutate(formData as any); 
-  };
-
-  if (!campaign) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Edit Campaign: {campaign.campaign_name}</DialogTitle></DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
-            <FormField control={form.control} name="person_id" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Client (Person)</FormLabel>
-                 <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    {people.filter(p => p.role === 'client').map(p => (
-                      <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_name" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_type" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Type</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
-              <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
-              <FormItem><FormLabel>Mock Interview Transcript/Link</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="media_kit_url" render={({ field }) => (
-              <FormItem><FormLabel>Media Kit URL</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
-              <FormItem><FormLabel>Instantly Campaign ID</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={editCampaignMutation.isPending}>
-                {editCampaignMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
 // --- Campaigns Table ---
-function CampaignsTable({ campaigns, onEditCampaign, onDeleteCampaign }: { 
+function CampaignsTable({ 
+  campaigns, onEditCampaign, onDeleteCampaign, onTriggerContentProcessing 
+}: { 
   campaigns: Campaign[];
   onEditCampaign: (campaign: Campaign) => void;
   onDeleteCampaign: (campaignId: string) => void;
+  onTriggerContentProcessing: (campaignId: string) => void;
 }) {
   return (
     <div className="border rounded-lg overflow-x-auto">
@@ -593,23 +428,47 @@ function CampaignsTable({ campaigns, onEditCampaign, onDeleteCampaign }: {
             <TableHead>Client ID</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Keywords</TableHead>
+            <TableHead>Embedding Status</TableHead>
             <TableHead>Created</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {campaigns.length === 0 && (
-            <TableRow><TableCell colSpan={6} className="text-center text-gray-500 py-4">No campaigns found.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={7} className="text-center text-gray-500 py-4">No campaigns found.</TableCell></TableRow>
           )}
           {campaigns.map((campaign) => (
             <TableRow key={campaign.campaign_id}>
               <TableCell className="font-medium">{campaign.campaign_name}</TableCell>
               <TableCell>{campaign.person_id}</TableCell>
               <TableCell>{campaign.campaign_type || "N/A"}</TableCell>
-              <TableCell className="max-w-xs truncate">{(campaign.campaign_keywords || []).join(', ') || "N/A"}</TableCell>
+              <TableCell className="max-w-xs text-xs">
+                {(campaign.campaign_keywords && campaign.campaign_keywords.length > 0) 
+                  ? campaign.campaign_keywords.slice(0, 3).map(kw => <Badge key={kw} variant="secondary" className="mr-1 mb-1">{kw}</Badge>)
+                  : "N/A"}
+                {campaign.campaign_keywords && campaign.campaign_keywords.length > 3 && <Badge variant="outline">+{campaign.campaign_keywords.length - 3} more</Badge>}
+              </TableCell>
+              <TableCell className="text-center">
+                {campaign.embedding_status ? (
+                    <Badge 
+                      variant={
+                        campaign.embedding_status === 'completed' ? 'default' :
+                        campaign.embedding_status === 'pending' ? 'outline' :
+                        campaign.embedding_status === 'failed' ? 'destructive' :
+                        'secondary'
+                      }
+                      className={`capitalize text-xs ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''}`}
+                    >
+                        {campaign.embedding_status.replace(/_/g, ' ')}
+                    </Badge>
+                    ) : <Badge variant="secondary" className="text-xs">N/A</Badge>}
+              </TableCell>
               <TableCell>{new Date(campaign.created_at).toLocaleDateString()}</TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end space-x-1">
+                  <Button size="sm" variant="outline" onClick={() => onTriggerContentProcessing(campaign.campaign_id)} title="Re-process Campaign Content & Embedding">
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => onEditCampaign(campaign)} title="Edit Campaign">
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -626,6 +485,15 @@ function CampaignsTable({ campaigns, onEditCampaign, onDeleteCampaign }: {
   );
 }
 
+// --- Task Status Interfaces (based on your plan) ---
+interface TaskStatus {
+  task_name: string;
+  last_run_start_time?: string | null;
+  last_run_end_time?: string | null;
+  last_run_status?: "completed" | "failed" | "running" | "never_run" | string; // string for flexibility
+  last_run_details?: string | null;
+  next_scheduled_run?: string | null;
+}
 
 // --- Main Admin Panel Component ---
 export default function AdminPanel() {
@@ -639,10 +507,13 @@ export default function AdminPanel() {
   const [passwordPerson, setPasswordPerson] = useState<{ id: number; name: string | null } | null>(null);
   const [isSetPasswordDialogOpen, setIsSetPasswordDialogOpen] = useState(false);
 
+  // State for refactored campaign dialogs
   const [isCreateCampaignDialogOpen, setIsCreateCampaignDialogOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [isEditCampaignDialogOpen, setIsEditCampaignDialogOpen] = useState(false);
 
+  // State for running tasks
+  const [runningTasks, setRunningTasks] = useState<Record<string, boolean>>({});
 
   const { data: people = [], isLoading: isLoadingPeople, error: peopleError } = useQuery<Person[]>({
     queryKey: ["/people/"], retry: 1,
@@ -650,6 +521,87 @@ export default function AdminPanel() {
   const { data: campaignsData = [], isLoading: isLoadingCampaigns, error: campaignsError } = useQuery<Campaign[]>({
     queryKey: ["/campaigns/"], retry: 1,
   });
+
+  const campaignsWithClientNames = useMemo(() => {
+    if (!campaignsData || !people) return [];
+    return campaignsData.map(campaign => {
+      const client = people.find(p => p.person_id === campaign.person_id);
+      return { 
+        ...campaign, 
+        client_name: client?.full_name || `Client ID: ${campaign.person_id}` 
+      };
+    });
+  }, [campaignsData, people]);
+
+  const filteredCampaigns = useMemo(() => {
+    if (!campaignsWithClientNames) return [];
+    return campaignsWithClientNames.filter(campaign =>
+      campaign.campaign_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      campaign.campaign_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (campaign.campaign_type && campaign.campaign_type.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (campaign.client_name && campaign.client_name.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [campaignsWithClientNames, searchTerm]);
+
+  // --- Queries for Task Statuses ---
+  const { data: episodeSyncStatus, isLoading: isLoadingEpisodeSyncStatus } = useQuery<TaskStatus>({
+    queryKey: ["/tasks/status/fetch_podcast_episodes"],
+    queryFn: async () => { 
+      const response = await apiRequest("GET", "/tasks/status/fetch_podcast_episodes");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Failed to fetch episode sync status" }));
+        throw new Error(errorData.detail || "Failed to fetch episode sync status");
+      }
+      return response.json();
+    },
+    retry: 1,
+  });
+
+  const { data: transcriptionTaskStatus, isLoading: isLoadingTranscriptionTaskStatus } = useQuery<TaskStatus>({
+    queryKey: ["/tasks/status/transcribe_podcast"], // Or transcribe_podcast_episodes if that's the backend task name
+    queryFn: async () => { 
+      const response = await apiRequest("GET", "/tasks/status/transcribe_podcast");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Failed to fetch transcription status" }));
+        throw new Error(errorData.detail || "Failed to fetch transcription status");
+      }
+      return response.json();
+    },
+    retry: 1,
+  });
+
+  // --- Task Management Logic --- START
+  const triggerTaskMutation = useMutation<any, Error, string, unknown>({
+    mutationFn: async (taskName: string) => {
+      toast({ title: "Task Triggered", description: `Attempting to start task: ${taskName}...` });
+      const response = await apiRequest("POST", `/tasks/run/${taskName}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: `Failed to trigger task ${taskName}` }));
+        throw new Error(errorData.detail || `Failed to trigger task ${taskName}`);
+      }
+      return response.json(); 
+    },
+    // Note: onSuccess and onError for useMutation are handled per-call in handleTriggerTask for more specific feedback
+  });
+
+  const handleTriggerTask = (taskName: string) => {
+    setRunningTasks(prev => ({ ...prev, [taskName]: true }));
+    triggerTaskMutation.mutate(taskName, {
+      onSuccess: (data) => {
+        toast({ title: "Task Success", description: data.message });
+        setRunningTasks(prev => ({ ...prev, [taskName]: false }));
+        // Potentially invalidate queries related to system status or the task's output here
+        // e.g., tanstackQueryClient.invalidateQueries({ queryKey: ["systemStatus"] });
+      },
+      onError: (error: Error) => {
+        toast({ title: "Task Failed", description: `Error running task '${taskName}': ${error.message}`, variant: "destructive" });
+        setRunningTasks(prev => ({ ...prev, [taskName]: false }));
+      },
+    });
+  };
+
+  const isTaskRunning = (taskName: string): boolean => !!runningTasks[taskName];
+  // --- Task Management Logic --- END
 
   const deletePersonMutation = useMutation({
     mutationFn: (personId: number) => apiRequest("DELETE", `/people/${personId}`),
@@ -697,12 +649,44 @@ export default function AdminPanel() {
     (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
     person.person_id.toString().includes(searchTerm)
   );
-  // TODO: Add filteredCampaigns if search is needed for campaigns
+  // Client-side filtering for campaigns is now implemented with filteredCampaigns
 
   const stats = {
     totalPeople: people.length,
     totalCampaigns: campaignsData.length,
   };
+
+  const handleTriggerCampaignContentProcessing = (campaignId: string) => {
+    // Construct the specific task name or directly use the new API structure
+    // New API: POST /tasks/run/process_campaign_content?campaign_id={campaignId}
+    // Using the generic task handler by constructing a specific task name is one way, 
+    // but since this task structure is different, we might need a dedicated mutation or adapt handleTriggerTask.
+    // For now, let's adapt handleTriggerTask to allow passing query params as part of the task name for simplicity if it can handle it
+    // OR create a new mutation specifically for this.
+
+    // Simpler: Create a new mutation for this specific task structure
+    processCampaignContentMutation.mutate(campaignId);
+  };
+
+  const processCampaignContentMutation = useMutation<any, Error, string>({
+    mutationFn: async (campaignId: string) => {
+      toast({ title: "Task Triggered", description: `Attempting to process content for campaign: ${campaignId}...` });
+      const response = await apiRequest("POST", `/tasks/run/process_campaign_content?campaign_id=${campaignId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: `Failed to trigger content processing for campaign ${campaignId}` }));
+        throw new Error(errorData.detail);
+      }
+      return response.json();
+    },
+    onSuccess: (data, campaignId) => {
+      toast({ title: "Task Success", description: data.message || `Campaign content processing initiated for ${campaignId}.` });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] }); // Invalidate the main campaigns list
+      tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", campaignId] }); // Invalidate specific campaign detail if viewed
+    },
+    onError: (error: Error, campaignId) => {
+      toast({ title: "Task Failed", description: `Error processing content for campaign '${campaignId}': ${error.message}`, variant: "destructive" });
+    },
+  });
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -720,7 +704,7 @@ export default function AdminPanel() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total People</p>
-                <p className="text-3xl font-bold text-gray-900">{isLoadingPeople ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalPeople}</p>
+                <div className="text-3xl font-bold text-gray-900">{isLoadingPeople ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalPeople}</div>
               </div>
               <Users className="h-8 w-8 text-primary" />
             </div>
@@ -731,7 +715,7 @@ export default function AdminPanel() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Campaigns</p>
-                <p className="text-3xl font-bold text-gray-900">{isLoadingCampaigns ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalCampaigns}</p>
+                <div className="text-3xl font-bold text-gray-900">{isLoadingCampaigns ? <Skeleton className="h-8 w-16 inline-block"/> : stats.totalCampaigns}</div>
               </div>
               <Briefcase className="h-8 w-8 text-primary" />
             </div>
@@ -780,9 +764,9 @@ export default function AdminPanel() {
         <CardHeader className="flex flex-row items-center justify-between">
             <div>
                 <CardTitle>Campaign Management</CardTitle>
-                <CardDescription>Overview of all client campaigns.</CardDescription>
+                <CardDescription>Overview of all client campaigns. You can trigger content reprocessing here.</CardDescription>
             </div>
-            <CreateCampaignDialog people={people} onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] })} />
+            <Button onClick={() => setIsCreateCampaignDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Create Campaign</Button>
         </CardHeader>
         <CardContent>
           {isLoadingCampaigns ? (
@@ -793,9 +777,10 @@ export default function AdminPanel() {
             <p className="text-red-500">Error loading campaigns: {(campaignsError as Error).message}</p>
           ) : (
             <CampaignsTable 
-                campaigns={campaignsData} 
+                campaigns={filteredCampaigns} 
                 onEditCampaign={openEditCampaignDialog}
                 onDeleteCampaign={handleDeleteCampaign}
+                onTriggerContentProcessing={handleTriggerCampaignContentProcessing}
             />
           )}
         </CardContent>
@@ -826,10 +811,19 @@ export default function AdminPanel() {
         />
       )}
 
+      {isCreateCampaignDialogOpen && (
+        <CreateCampaignDialog 
+            people={people as PersonForCampaignDialogs[]} 
+            open={isCreateCampaignDialogOpen} 
+            onOpenChange={setIsCreateCampaignDialogOpen} 
+            onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/"] })}
+        />
+      )}
+      
       {isEditCampaignDialogOpen && editingCampaign && (
         <EditCampaignDialog
-          campaign={editingCampaign}
-          people={people}
+          campaign={editingCampaign as any}
+          people={people as PersonForCampaignDialogs[]}
           open={isEditCampaignDialogOpen}
           onOpenChange={setIsEditCampaignDialogOpen}
           onSuccess={() => {
@@ -839,6 +833,81 @@ export default function AdminPanel() {
         />
       )}
       
+      <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center"><SettingsIcon className="mr-2 h-5 w-5"/>System Task Status</CardTitle>
+            <CardDescription>Overview of automated background task statuses.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <h4 className="font-medium">Episode Sync (fetch_podcast_episodes):</h4>
+            {isLoadingEpisodeSyncStatus ? <Skeleton className="h-5 w-3/4 mt-1" /> : (
+              episodeSyncStatus ? (
+                <div className="text-sm text-gray-600 space-y-0.5 mt-1">
+                  <p>Last Run: {episodeSyncStatus.last_run_end_time ? new Date(episodeSyncStatus.last_run_end_time).toLocaleString() : 'N/A'}</p>
+                  <p>Status: <Badge variant={episodeSyncStatus.last_run_status === 'completed' ? 'default' : episodeSyncStatus.last_run_status === 'running' ? 'outline' : 'destructive'} className={episodeSyncStatus.last_run_status === 'completed' ? 'bg-green-100 text-green-700' : episodeSyncStatus.last_run_status === 'running' ? 'bg-blue-100 text-blue-700' : '' }>{episodeSyncStatus.last_run_status || 'N/A'}</Badge></p>
+                  {episodeSyncStatus.last_run_details && <p>Details: {episodeSyncStatus.last_run_details}</p>}
+                  {episodeSyncStatus.next_scheduled_run && <p>Next Run: {new Date(episodeSyncStatus.next_scheduled_run).toLocaleString()}</p>}
+                </div>
+              ) : <p className="text-sm text-gray-500 mt-1">Could not load status.</p>
+            )}
+          </div>
+          <div className="pt-3 border-t">
+            <h4 className="font-medium">Transcription & Analysis (transcribe_podcast):</h4>
+            {isLoadingTranscriptionTaskStatus ? <Skeleton className="h-5 w-3/4 mt-1" /> : (
+              transcriptionTaskStatus ? (
+                <div className="text-sm text-gray-600 space-y-0.5 mt-1">
+                  <p>Last Run: {transcriptionTaskStatus.last_run_end_time ? new Date(transcriptionTaskStatus.last_run_end_time).toLocaleString() : (transcriptionTaskStatus.last_run_start_time ? `${new Date(transcriptionTaskStatus.last_run_start_time).toLocaleString()} (Still Running)` : 'N/A')}</p>
+                  <p>Status: <Badge variant={transcriptionTaskStatus.last_run_status === 'completed' ? 'default' : transcriptionTaskStatus.last_run_status === 'running' ? 'outline' : 'destructive'} className={transcriptionTaskStatus.last_run_status === 'completed' ? 'bg-green-100 text-green-700' : transcriptionTaskStatus.last_run_status === 'running' ? 'bg-blue-100 text-blue-700' : '' }>{transcriptionTaskStatus.last_run_status || 'N/A'}</Badge></p>
+                  {transcriptionTaskStatus.last_run_details && <p>Details: {transcriptionTaskStatus.last_run_details}</p>}
+                  {transcriptionTaskStatus.next_scheduled_run && <p>Next Run: {new Date(transcriptionTaskStatus.next_scheduled_run).toLocaleString()}</p>}
+                </div>
+              ) : <p className="text-sm text-gray-500 mt-1">Could not load status.</p>
+            )}
+          </div>
+          {/* Add more task statuses as needed here */}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center"><SettingsIcon className="mr-2 h-5 w-5"/>Manual Task Triggers</CardTitle>
+            <CardDescription>Manually initiate system processes. These are global triggers.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1">Podcast Episode Ingestion</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Manually trigger a global sync for all podcasts.
+              For specific podcast sync, go to its Media Detail page.
+            </p>
+            <Button
+              size="sm"
+              onClick={() => handleTriggerTask('fetch_podcast_episodes')}
+              disabled={isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'fetch_podcast_episodes')}
+            >
+              { (isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'fetch_podcast_episodes')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Syncing All...</> : "Sync All Podcast Episodes"}
+            </Button>
+          </div>
+          {/* --- Transcription & Analysis Task --- START */}
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Episode Transcription & Analysis</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Manually trigger transcription & analysis for episodes needing it.
+              For specific podcast transcription, go to its Media Detail page.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('transcribe_podcast')}
+              disabled={isTaskRunning('transcribe_podcast') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'transcribe_podcast')}
+            >
+              { (isTaskRunning('transcribe_podcast') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'transcribe_podcast')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : "Process Transcriptions & Analysis"}
+            </Button>
+          </div>
+          {/* --- Transcription & Analysis Task --- END */}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
             <CardTitle className="flex items-center"><SettingsIcon className="mr-2 h-5 w-5"/>System Settings</CardTitle>

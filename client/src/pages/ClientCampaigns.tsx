@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FolderOpen, ArrowRight, AlertTriangle, TrendingUp } from "lucide-react"; // Added TrendingUp and AlertTriangle
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
 
 // Interface for the campaign data expected from the backend
 // This should align with your backend's CampaignInDB schema,
@@ -17,7 +18,8 @@ interface ClientCampaignSummary {
   campaign_name: string;
   campaign_type?: string | null;
   created_at: string; // ISO datetime string
-  // Optional summary stats you might add in the backend for this view:
+  campaign_keywords?: string[] | null;
+  embedding_status?: string | null;
   active_placements_count?: number;
   pending_approvals_count?: number; // Number of match_suggestions or pitch_reviews pending client approval
 }
@@ -131,13 +133,32 @@ export default function ClientCampaigns() {
                 <CardTitle className="text-lg truncate" title={campaign.campaign_name}>
                   {campaign.campaign_name}
                 </CardTitle>
-                <CardDescription>
-                  Type: {campaign.campaign_type || "General Outreach"} | Created: {new Date(campaign.created_at).toLocaleDateString()}
+                <CardDescription className="flex flex-col sm:flex-row sm:justify-between text-xs">
+                  <span>Type: {campaign.campaign_type || "General Outreach"}</span>
+                  <span>Created: {new Date(campaign.created_at).toLocaleDateString()}</span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow flex flex-col justify-between">
                 <div className="space-y-2 mb-4">
-                  {/* Example stats - these would need to come from the backend or be calculated */}
+                  {campaign.embedding_status && (
+                    <div className="text-sm">
+                      <span className="font-medium">Profile Strength: </span>
+                      <Badge 
+                        variant={
+                          campaign.embedding_status === 'completed' ? 'default' :
+                          campaign.embedding_status === 'pending' ? 'outline' :
+                          campaign.embedding_status === 'failed' ? 'destructive' :
+                          campaign.embedding_status === 'not_enough_content' ? 'secondary' :
+                          'secondary'
+                        }
+                        className={`capitalize ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : campaign.embedding_status === 'not_enough_content' ? 'bg-orange-100 text-orange-700' : ''}`}
+                       >
+                         {campaign.embedding_status.replace(/_/g, ' ')}
+                       </Badge>
+                       {campaign.embedding_status === 'not_enough_content' && 
+                         <p className="text-xs text-orange-500 mt-0.5">Complete profile setup for best results.</p> }
+                    </div>
+                  )}
                   {typeof campaign.active_placements_count === 'number' && (
                     <p className="text-sm text-gray-600">
                       <TrendingUp className="inline h-4 w-4 mr-1 text-green-500" /> 

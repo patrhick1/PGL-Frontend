@@ -50,31 +50,60 @@ interface AnglesBioTriggerResponse {
     } | null;
 }
 
-export default function AnglesGenerator() {
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+interface AnglesGeneratorProps {
+  campaignId: string | null;
+  onSuccessfulGeneration?: () => void;
+  // We could also pass a flag like `isQuestionnaireComplete` if ProfileSetup has this readily available
+  // to manage the disabled state of the generate button, rather than AnglesGenerator re-fetching campaign details for this.
+  // For now, AnglesGenerator will still fetch minimal campaign details to check `mock_interview_trancript`
+  // or rely on parent to disable it if questionnaire is not complete.
+}
+
+export default function AnglesGenerator({ campaignId, onSuccessfulGeneration }: AnglesGeneratorProps) {
+  // Remove local selectedCampaignId and clientCampaigns query as campaignId is now a prop
+  // const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [generatedContent, setGeneratedContent] = useState<AnglesBioTriggerResponse['details']>(null);
+  const [isProcessingCampaignContent, setIsProcessingCampaignContent] = useState(false);
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth(); // Keep useAuth for potential user context if needed
 
-  const { data: clientCampaigns = [], isLoading: isLoadingCampaigns } = useQuery<ClientCampaign[]>({
-    queryKey: ["clientCampaignsForAngles", user?.person_id],
+  // Fetch details for the *specific* campaignId passed as prop to check its status (e.g., mock_interview_trancript)
+  // This is a simplified fetch, ProfileSetup might already have this data.
+  const { data: campaignDetails, isLoading: isLoadingCampaignDetails } = useQuery<ClientCampaign | null>({
+    queryKey: ["campaignDetailsForAnglesGenerator", campaignId], // Use prop campaignId
     queryFn: async () => {
-      if (!user?.person_id) return [];
-      const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
-      if (!response.ok) throw new Error("Failed to fetch client campaigns");
-      const campaigns: ClientCampaign[] = await response.json();
-      // Filter for campaigns that have a mock interview transcript, indicating questionnaire is likely filled.
-      return campaigns.filter(c => c.mock_interview_trancript && c.mock_interview_trancript.trim() !== "");
+      if (!campaignId) return null;
+      const response = await apiRequest("GET", `/campaigns/${campaignId}`);
+      if (!response.ok) {
+        // console.warn(`Failed to fetch campaign details for ${campaignId} in AnglesGenerator`);
+        // It might be better to let the mutation handle the error if the campaign doesn't exist or questionnaire is not ready
+        return null; 
+      }
+      return response.json();
     },
-    enabled: !!user?.person_id && !authLoading,
+    enabled: !!campaignId, // Only run if campaignId is provided
   });
+
+  // const { data: clientCampaigns = [], isLoading: isLoadingCampaigns } = useQuery<ClientCampaign[]>({
+  //   queryKey: ["clientCampaignsForAngles", user?.person_id],
+  //   queryFn: async () => {
+  //     if (!user?.person_id) return [];
+  //     const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
+  //     if (!response.ok) throw new Error("Failed to fetch client campaigns");
+  //     const campaigns: ClientCampaign[] = await response.json();
+  //     // Filter for campaigns that have a mock interview transcript, indicating questionnaire is likely filled.
+  //     return campaigns.filter(c => c.mock_interview_trancript && c.mock_interview_trancript.trim() !== "");
+  //   },
+  //   enabled: !!user?.person_id && !authLoading,
+  // });
   
-  const selectedCampaignDetails = clientCampaigns.find(c => c.campaign_id === selectedCampaignId);
+  // const selectedCampaignDetails = clientCampaigns.find(c => c.campaign_id === selectedCampaignId);
 
   const triggerAnglesBioMutation = useMutation({
-    mutationFn: async (campaignId: string): Promise<AnglesBioTriggerResponse> => {
-      const response = await apiRequest("POST", `/campaigns/${campaignId}/generate-angles-bio`, {});
+    mutationFn: async (currentCampaignId: string): Promise<AnglesBioTriggerResponse> => { // parameter renamed to avoid conflict with prop
+      if (!currentCampaignId) throw new Error("Campaign ID is required for generation.");
+      const response = await apiRequest("POST", `/campaigns/${currentCampaignId}/generate-angles-bio`, {});
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Failed to trigger generation."}));
         throw new Error(errorData.detail);
@@ -84,103 +113,98 @@ export default function AnglesGenerator() {
     onSuccess: (data) => {
       if (data.status === "success" && data.details) {
         setGeneratedContent(data.details);
-        toast({ title: "Generation Successful", description: data.message });
+        // toast({ title: "Generation Successful", description: data.message }); // Handled by parent
+        setIsProcessingCampaignContent(true);
+        // toast({ // Handled by parent
+        //   title: "Processing Campaign Content",
+        //   description: "Bio & Angles generated. We're now further processing your campaign content for enhanced matching.",
+        //   duration: 7000,
+        // });
+        if (onSuccessfulGeneration) {
+          onSuccessfulGeneration();
+        }
       } else {
-        setGeneratedContent(null); // Clear previous results if not successful
+        setGeneratedContent(null);
+        setIsProcessingCampaignContent(false);
         toast({ title: "Generation Info", description: data.message, variant: data.status === "error" ? "destructive" : "default" });
       }
-      if (selectedCampaignId) {
-        tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForAngles", user?.person_id] }); // Refetch to update displayed campaign details
-        tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetails", selectedCampaignId] }); // If you have a query for single campaign details
-      }
+      // Invalidation will be handled by parent or specific queries in ProfileSetup after callback
+      // if (campaignId) { // Use prop campaignId
+      //   tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForAngles", user?.person_id] });
+      //   tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetails", campaignId] });
+      //   tanstackQueryClient.invalidateQueries({ queryKey: ["campaignKeywords", campaignId] });
+      // }
     },
     onError: (error: any) => {
       setGeneratedContent(null);
+      setIsProcessingCampaignContent(false);
       toast({ title: "Generation Failed", description: error.message || "Could not trigger angles/bio generation.", variant: "destructive" });
     },
   });
 
   const handleGenerate = () => {
-    if (!selectedCampaignId) {
-      toast({ title: "Campaign Required", description: "Please select a campaign.", variant: "destructive" });
+    if (!campaignId) { // Use prop campaignId
+      toast({ title: "Campaign Required", description: "Please select a campaign (this should not happen).", variant: "destructive" });
       return;
     }
-    const campaign = clientCampaigns.find(c => c.campaign_id === selectedCampaignId);
-    if (!campaign || !campaign.mock_interview_trancript || campaign.mock_interview_trancript.trim() === "") {
-        toast({ title: "Questionnaire Needed", description: "The selected campaign needs a completed questionnaire (which populates the mock interview transcript) before generating angles/bio.", variant: "destructive" });
+    // const campaign = clientCampaigns.find(c => c.campaign_id === campaignId);
+    // The check for mock_interview_trancript should ideally be done based on campaignDetails or passed by parent
+    if (!campaignDetails || !campaignDetails.mock_interview_trancript || campaignDetails.mock_interview_trancript.trim() === "") {
+        toast({ title: "Questionnaire Needed", description: "The selected campaign needs a completed questionnaire before generating angles/bio.", variant: "destructive" });
         return;
     }
     setGeneratedContent(null); // Clear previous results
-    triggerAnglesBioMutation.mutate(selectedCampaignId);
+    triggerAnglesBioMutation.mutate(campaignId); // Use prop campaignId
   };
 
-  if (authLoading || isLoadingCampaigns) {
+  if (authLoading || (campaignId && isLoadingCampaignDetails)) { // Check loading state for campaignDetails if campaignId is present
     return <div className="p-6 text-center"><Skeleton className="h-10 w-1/2 mx-auto mb-4" /><Skeleton className="h-64 w-full" /></div>;
   }
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 p-4 md:p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-primary" />AI-Powered Bio & Angles Generator</CardTitle>
-          <CardDescription>
-            Select a campaign with a completed questionnaire. Our AI will analyze the information
-            to generate a compelling client bio and targeted pitch angles, saved as Google Docs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label htmlFor="campaign-select-angles" className="text-sm font-medium mb-2 block">
-              Select Campaign
-            </label>
-            {clientCampaigns.length === 0 && !isLoadingCampaigns ? (
-                <div className="p-4 border rounded-md bg-yellow-50 border-yellow-200 text-yellow-700 text-sm">
-                    <AlertTriangle className="inline h-4 w-4 mr-2" />
-                    No campaigns found with completed questionnaires. Please fill out the <Link href="/questionnaire" className="underline hover:text-yellow-800">questionnaire</Link> for a campaign first.
-                </div>
-            ) : (
-              <Select
-                value={selectedCampaignId || ""}
-                onValueChange={(value) => {
-                  setSelectedCampaignId(value === "none" ? null : value);
-                  setGeneratedContent(null);
-                }}
-              >
-                <SelectTrigger id="campaign-select-angles" disabled={isLoadingCampaigns}>
-                  <SelectValue placeholder="Choose a campaign..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" disabled>Choose a campaign...</SelectItem>
-                  {clientCampaigns.map((campaign) => (
-                    <SelectItem key={campaign.campaign_id} value={campaign.campaign_id}>
-                      {campaign.campaign_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+  if (!campaignId) { // If no campaign is selected (passed as prop)
+    return (
+        <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+                <Info className="mx-auto h-10 w-10 mb-3 text-blue-500" />
+                <p>Please select a campaign in the main setup page to generate AI Bio & Angles.</p>
+            </CardContent>
+        </Card>
+    );
+  }
 
-          {selectedCampaignDetails && (
-            <div className="p-3 border rounded-md bg-gray-50 text-xs text-gray-600 space-y-1">
-                <p><strong>Selected Campaign:</strong> {selectedCampaignDetails.campaign_name}</p>
+  // Check if questionnaire is complete for the selected campaign (using campaignDetails)
+  const isQuestionnaireCompleteForSelectedCampaign = !!(campaignDetails && campaignDetails.mock_interview_trancript && campaignDetails.mock_interview_trancript.trim() !== "");
+
+  return (
+    <>
+          {/* Previous content of the component, now inside a fragment */}
+          {campaignDetails && (
+            <div className="p-3 border rounded-md bg-gray-50 text-xs text-gray-600 space-y-1 mb-4">
+                <p><strong>Selected Campaign:</strong> {campaignDetails.campaign_name}</p>
                 <p>
-                    <strong>Questionnaire/Mock Interview Status:</strong> 
-                    {selectedCampaignDetails.mock_interview_trancript ? 
+                    <strong>Questionnaire Status:</strong> 
+                    {isQuestionnaireCompleteForSelectedCampaign ? 
                         <Badge variant="default" className="bg-green-100 text-green-700 ml-1">Ready for Generation</Badge> :
-                        <Badge variant="destructive" className="ml-1">Questionnaire Incomplete</Badge>
+                        <Badge variant="destructive" className="ml-1">Questionnaire Incomplete/Not Processed</Badge>
                     }
                 </p>
-                {selectedCampaignDetails.campaign_bio && 
-                    <p><strong>Current Bio:</strong> <a href={selectedCampaignDetails.campaign_bio} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
-                {selectedCampaignDetails.campaign_angles && 
-                    <p><strong>Current Angles:</strong> <a href={selectedCampaignDetails.campaign_angles} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
+                {campaignDetails.campaign_bio && 
+                    <p><strong>Current Bio:</strong> <a href={campaignDetails.campaign_bio} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
+                {campaignDetails.campaign_angles && 
+                    <p><strong>Current Angles:</strong> <a href={campaignDetails.campaign_angles} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">View Document</a></p>}
+            </div>
+          )}
+
+          {!isQuestionnaireCompleteForSelectedCampaign && campaignId && !isLoadingCampaignDetails && (
+            <div className="p-4 border rounded-md bg-yellow-50 border-yellow-200 text-yellow-700 text-sm mb-4">
+                <AlertTriangle className="inline h-4 w-4 mr-2" />
+                The selected campaign needs a completed and processed questionnaire before Bio & Angles can be generated. Please complete the Questionnaire tab first.
             </div>
           )}
 
           <Button 
             onClick={handleGenerate} 
-            disabled={!selectedCampaignId || triggerAnglesBioMutation.isPending || !selectedCampaignDetails?.mock_interview_trancript}
+            disabled={!campaignId || triggerAnglesBioMutation.isPending || !isQuestionnaireCompleteForSelectedCampaign || isLoadingCampaignDetails}
             className="bg-primary text-primary-foreground hover:bg-primary/90 w-full md:w-auto"
           >
             {triggerAnglesBioMutation.isPending ? (
@@ -189,13 +213,11 @@ export default function AnglesGenerator() {
               <><Sparkles className="mr-2 h-4 w-4" />Generate Bio & Angles</>
             )}
           </Button>
-        </CardContent>
-      </Card>
 
-      {triggerAnglesBioMutation.isSuccess && generatedContent && (
-        <Card>
+      {triggerAnglesBioMutation.isSuccess && generatedContent && campaignDetails && (
+        <Card className="mt-4">
           <CardHeader>
-            <CardTitle>Generated Content for "{selectedCampaignDetails?.campaign_name}"</CardTitle>
+            <CardTitle>Generated Content for "{campaignDetails?.campaign_name}"</CardTitle>
             <CardDescription>{triggerAnglesBioMutation.data?.message}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -244,9 +266,9 @@ export default function AnglesGenerator() {
                 <li>A list of relevant keywords for the campaign.</li>
             </ul>
             <p>5. The generated bio and angles will be saved as new Google Documents, and links to these documents will be stored in the campaign's record in the database. Keywords will also be saved to the campaign.</p>
-            <p>6. You will see links to the generated documents and the keywords on this page after successful generation.</p>
+            <p>6. You will see links to the generated documents and the keywords on this page after successful generation. The main campaign status will update shortly thereafter.</p>
         </CardContent>
       </Card>
-    </div>
+    </> // Closing the main fragment
   );
 }

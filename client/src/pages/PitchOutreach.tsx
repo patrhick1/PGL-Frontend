@@ -15,10 +15,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, Edit3, Check, X, ListChecks, MailCheck, MailOpen, RefreshCw, ExternalLink, Eye, MessageSquare, Filter, Search, Lightbulb, Info, Save } from "lucide-react";
+import { Send, Edit3, Check, X, ListChecks, MailCheck, MailOpen, RefreshCw, ExternalLink, Eye, MessageSquare, Filter, Search, Lightbulb, Info, Save, LinkIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PitchTemplate } from "@/pages/PitchTemplates.tsx"; // Added .tsx extension
 
 // --- Interfaces (Aligned with expected enriched backend responses) ---
 
@@ -33,6 +34,17 @@ interface ApprovedMatchForPitching { // From GET /match-suggestions/?status=appr
   client_name?: string | null;
 }
 
+interface EpisodeAnalysisData { // Define placeholder for expected data structure
+  episode_id?: number;
+  title?: string | null;
+  ai_episode_summary?: string | null;
+  episode_themes?: string[] | null;
+  episode_keywords?: string[] | null;
+  transcript_available?: boolean;
+  ai_analysis_done?: boolean;
+  // Potentially a link to the episode or transcript viewer
+}
+
 interface PitchDraftForReview { // From GET /review-tasks/?task_type=pitch_review&status=pending (enriched)
   review_task_id: number;
   pitch_gen_id: number;
@@ -44,6 +56,7 @@ interface PitchDraftForReview { // From GET /review-tasks/?task_type=pitch_revie
   campaign_name?: string | null;
   client_name?: string | null;
   media_website?: string | null; // Added for context
+  relevant_episode_analysis?: EpisodeAnalysisData | null; // NEW - To be populated by backend
 }
 
 interface PitchReadyToSend { // From GET /pitches/?pitch_state=ready_to_send (enriched)
@@ -75,10 +88,10 @@ interface SentPitchStatus { // From GET /pitches/?pitch_state__in=... (enriched)
   media_website?: string | null; // Added for context
 }
 
-const pitchTemplateOptions = [
-    { value: "friendly_intro_template", label: "Friendly Introduction" },
-    // Add more templates as they are created in the backend
-];
+// const pitchTemplateOptions = [ // REMOVE THIS
+//     { value: "friendly_intro_template", label: "Friendly Introduction" },
+//     // Add more templates as they are created in the backend
+// ];
 
 const editDraftSchema = z.object({
   subject_line: z.string().min(1, "Subject line is required."),
@@ -90,15 +103,22 @@ type EditDraftFormData = z.infer<typeof editDraftSchema>;
 // --- Tab Components ---
 
 function ReadyForDraftTab({
-    approvedMatches, onGenerate, isLoadingGenerateForMatchId, selectedTemplate, onTemplateChange, isLoadingMatches
+    approvedMatches, onGenerate, isLoadingGenerateForMatchId, templates, isLoadingMatches
 }: {
     approvedMatches: ApprovedMatchForPitching[];
-    onGenerate: (matchId: number, templateName: string) => void;
-    isLoadingGenerateForMatchId: number | null; // Track loading state per match
-    selectedTemplate: string;
-    onTemplateChange: (template: string) => void;
+    onGenerate: (matchId: number, templateId: string) => void;
+    isLoadingGenerateForMatchId: number | null;
+    templates: PitchTemplate[];
     isLoadingMatches: boolean;
 }) {
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
+    useEffect(() => {
+        if (templates && templates.length > 0 && !selectedTemplateId) {
+            setSelectedTemplateId(templates[0].template_id);
+        }
+    }, [templates, selectedTemplateId]);
+
     if (isLoadingMatches) {
         return (
             <div className="space-y-4">
@@ -115,10 +135,13 @@ function ReadyForDraftTab({
         <div className="space-y-6">
             <div>
                 <label htmlFor="pitch-template-select" className="text-sm font-medium block mb-2 text-gray-700">Select Pitch Template:</label>
-                <Select value={selectedTemplate} onValueChange={onTemplateChange}>
-                  <SelectTrigger id="pitch-template-select" className="w-full md:w-1/2 lg:w-1/3"><SelectValue placeholder="Select pitch template..." /></SelectTrigger>
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={!templates || templates.length === 0}>
+                  <SelectTrigger id="pitch-template-select" className="w-full md:w-1/2 lg:w-1/3">
+                      <SelectValue placeholder="Select pitch template..." />
+                  </SelectTrigger>
                   <SelectContent>
-                    {pitchTemplateOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {(!templates || templates.length === 0) && <SelectItem value="" disabled>No templates available. Create one in Pitch Templates.</SelectItem>}
+                    {templates && templates.map(opt => <SelectItem key={opt.template_id} value={opt.template_id}>{opt.template_id} (Tone: {opt.tone || 'N/A'})</SelectItem>)}
                   </SelectContent>
                 </Select>
             </div>
@@ -140,8 +163,8 @@ function ReadyForDraftTab({
                             </div>
                             <Button
                                 size="sm"
-                                onClick={() => onGenerate(match.match_id, selectedTemplate)}
-                                disabled={isLoadingGenerateForMatchId === match.match_id}
+                                onClick={() => onGenerate(match.match_id, selectedTemplateId)}
+                                disabled={isLoadingGenerateForMatchId === match.match_id || !selectedTemplateId || !templates || templates.length === 0}
                                 className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto"
                             >
                                 {isLoadingGenerateForMatchId === match.match_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Lightbulb className="h-4 w-4 mr-1"/>}
@@ -174,25 +197,60 @@ function EditDraftModal({ draft, open, onOpenChange, onSave, isSaving }: {
                 draft_text: draft.draft_text || "",
             });
         }
-    }, [draft, open, form]);
-
-    if (!draft) return null;
+    }, [draft, form, open]);
 
     const onSubmit = (data: EditDraftFormData) => {
-        onSave(draft.pitch_gen_id, data);
+        if (draft) { // Ensure draft is not null
+            onSave(draft.pitch_gen_id, data);
+        }
     };
+
+    if (!draft) return null; // Add null check for draft
+
+    // Placeholder for displaying relevant episode analysis
+    const episodeAnalysis = draft.relevant_episode_analysis;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Edit Pitch Draft for: {draft.media_name}</DialogTitle>
-                    <DialogDescription>Campaign: {draft.campaign_name}</DialogDescription>
+                    <DialogDescription>
+                        Campaign: {draft.campaign_name} | Client: {draft.client_name}
+                        {draft.media_website && 
+                            <a href={draft.media_website} target="_blank" rel="noopener noreferrer" className="ml-2 text-primary hover:underline text-sm inline-flex items-center">
+                                <LinkIcon className="h-3 w-3 mr-1" /> Website
+                            </a>
+                        }
+                    </DialogDescription>
                 </DialogHeader>
+                
+                {/* --- Relevant Episode Analysis Display (Placeholder) --- START */}
+                {episodeAnalysis && (
+                    <Card className="my-4 bg-slate-50 p-3">
+                        <CardHeader className="p-2">
+                            <CardTitle className="text-base flex items-center">
+                                <Info className="h-4 w-4 mr-2 text-blue-600" /> Relevant Episode Insights: {episodeAnalysis.title || 'Episode Info'}
+                                {episodeAnalysis.ai_analysis_done && <Badge variant="secondary" className="ml-2 text-xs">Analyzed</Badge>}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs p-2 space-y-1">
+                            {episodeAnalysis.ai_episode_summary && 
+                                <p><span className="font-semibold">Summary:</span> {episodeAnalysis.ai_episode_summary}</p>}
+                            {episodeAnalysis.episode_themes && episodeAnalysis.episode_themes.length > 0 && 
+                                <div><span className="font-semibold">Themes:</span> {episodeAnalysis.episode_themes.map(t => <Badge key={t} variant="outline" className="mr-1 text-xs">{t}</Badge>)}</div>}
+                            {episodeAnalysis.episode_keywords && episodeAnalysis.episode_keywords.length > 0 && 
+                                <div><span className="font-semibold">Keywords:</span> {episodeAnalysis.episode_keywords.map(k => <Badge key={k} variant="outline" className="mr-1 text-xs">{k}</Badge>)}</div>}
+                            {episodeAnalysis.transcript_available === false && <p className="text-orange-600">Transcript not yet available.</p>}
+                        </CardContent>
+                    </Card>
+                )}
+                {/* --- Relevant Episode Analysis Display (Placeholder) --- END */}
+
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
                         <FormField control={form.control} name="subject_line" render={({ field }) => (<FormItem><FormLabel>Subject Line</FormLabel><FormControl><Input placeholder="Enter pitch subject line" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="draft_text" render={({ field }) => (<FormItem><FormLabel>Pitch Body</FormLabel><FormControl><Textarea placeholder="Enter pitch body..." className="min-h-[250px] max-h-[40vh] overflow-y-auto text-sm" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="draft_text" render={({ field }) => (<FormItem><FormLabel>Pitch Body</FormLabel><FormControl><Textarea placeholder="Enter pitch body..." className="min-h-[200px] max-h-[35vh] overflow-y-auto text-sm" {...field} /></FormControl><FormMessage /></FormItem>)} />
                         <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground">{isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4"/>Save Changes</>}</Button></DialogFooter>
                     </form>
                 </Form>
@@ -369,7 +427,6 @@ export default function PitchOutreach() {
   const queryParams = new URLSearchParams(window.location.search);
   const initialCampaignIdFilter = queryParams.get("campaignId"); // Example: ?campaignId=some-uuid
 
-  const [selectedPitchTemplate, setSelectedPitchTemplate] = useState<string>(pitchTemplateOptions[0].value);
   const [activeTab, setActiveTab] = useState<string>("readyForDraft");
   const [editingDraft, setEditingDraft] = useState<PitchDraftForReview | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -383,6 +440,19 @@ export default function PitchOutreach() {
   const [reviewDraftsPage, setReviewDraftsPage] = useState(1);
   const REVIEW_DRAFTS_PAGE_SIZE = 10;
 
+  // Fetch pitch templates for the dropdown
+  const { data: pitchTemplates = [], isLoading: isLoadingTemplates, error: templatesError } = useQuery<PitchTemplate[]>({
+    queryKey: ["/pitch-templates/"],
+    queryFn: async () => {
+        const response = await apiRequest("GET", "/pitch-templates/");
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: "Failed to fetch pitch templates" }));
+            throw new Error(errorData.detail);
+        }
+        return response.json();
+    },
+    staleTime: 1000 * 60 * 5, // Cache for 5 mins
+  });
 
   // --- Data Fetching with React Query ---
 
@@ -458,9 +528,9 @@ export default function PitchOutreach() {
 
   // --- Mutations ---
   const generatePitchDraftMutation = useMutation({
-    mutationFn: async ({ matchId, templateName }: { matchId: number; templateName: string }) => {
+    mutationFn: async ({ matchId, pitch_template_id }: { matchId: number; pitch_template_id: string }) => {
       setIsLoadingGenerateForMatchId(matchId);
-      const response = await apiRequest("POST", "/pitches/generate", { match_id: matchId, pitch_template_name: templateName });
+      const response = await apiRequest("POST", "/pitches/generate", { match_id: matchId, pitch_template_id: pitch_template_id });
       if (!response.ok) { const errorData = await response.json().catch(() => ({ detail: "Failed to generate pitch draft." })); throw new Error(errorData.detail); }
       return response.json();
     },
@@ -521,16 +591,15 @@ export default function PitchOutreach() {
         toast({ title: "Pitch Sent", description: data.message || "Pitch has been queued for sending." });
         tanstackQueryClient.invalidateQueries({ queryKey: ["pitchesReadyToSend"] });
         tanstackQueryClient.invalidateQueries({ queryKey: ["sentPitchesStatus"] });
-        setActiveTab("sentPitches");
     },
     onError: (error: any) => { toast({ title: "Send Failed", description: error.message, variant: "destructive" }); },
     onSettled: () => { setIsLoadingSendForPitchId(null); }
   });
 
 
-  const handleGeneratePitch = (matchId: number, templateName: string) => {
-    if (!templateName) { toast({ title: "Template Required", description: "Please select a pitch template.", variant: "destructive"}); return; }
-    generatePitchDraftMutation.mutate({ matchId, templateName });
+  const handleGeneratePitch = (matchId: number, templateId: string) => {
+    if (!templateId) { toast({ title: "Template Required", description: "Please select a pitch template.", variant: "destructive"}); return; }
+    generatePitchDraftMutation.mutate({ matchId, pitch_template_id: templateId });
   };
   const handleApprovePitch = (pitchGenId: number) => { approvePitchDraftMutation.mutate(pitchGenId); };
   const handleSendPitch = (pitchId: number) => { sendPitchMutation.mutate(pitchId); };
@@ -568,11 +637,11 @@ export default function PitchOutreach() {
             approvedMatches={approvedMatches}
             onGenerate={handleGeneratePitch}
             isLoadingGenerateForMatchId={isLoadingGenerateForMatchId}
-            selectedTemplate={selectedPitchTemplate}
-            onTemplateChange={setSelectedPitchTemplate}
-            isLoadingMatches={isLoadingApprovedMatches}
+            templates={pitchTemplates}
+            isLoadingMatches={isLoadingApprovedMatches || isLoadingTemplates}
           />
           {approvedMatchesError && <p className="text-red-500 mt-2">Error loading approved matches: {(approvedMatchesError as Error).message}</p>}
+          {templatesError && <p className="text-red-500 mt-2">Error loading pitch templates: {(templatesError as Error).message}</p>}
         </TabsContent>
 
         <TabsContent value="draftsReview" className="mt-6">

@@ -7,24 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users as ClientsIcon, Plus, Edit, Trash2, Search, ArrowRight } from "lucide-react";
+import { Users as ClientsIcon, Plus, Edit, Trash2, Search, ArrowRight, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-// Import CreateCampaignDialog and EditCampaignDialog from AdminPanel.tsx or a shared components dir
-// For this example, I'll assume they are adapted or re-created here if needed.
-// You'll need Person and Campaign interfaces (similar to AdminPanel.tsx)
+import { Badge } from "@/components/ui/badge";
+import CreateCampaignDialog, { PersonForClientSelection as PersonForCampaignDialogs } from "@/components/dialogs/CreateCampaignDialog";
+import EditCampaignDialog, { CampaignForEdit } from "@/components/dialogs/EditCampaignDialog";
 
-interface PersonSummary {
-  person_id: number;
-  full_name: string | null;
-  email: string;
+
+interface PersonSummaryForCampaignManagement extends PersonForCampaignDialogs { // Ensure role is available
+  // Inherits person_id, full_name, email, role from PersonForCampaignDialogs
 }
-interface CampaignSummary { // Matches CampaignInDB from backend
-  campaign_id: string;
-  person_id: number;
-  campaign_name: string;
-  campaign_type?: string | null;
-  campaign_keywords?: string[] | null;
+
+interface CampaignSummaryForManagement extends CampaignForEdit { // Use CampaignForEdit as base
+  // Inherits campaign_id, person_id, campaign_name, campaign_type, campaign_keywords, etc.
+  embedding_status?: string | null;
   created_at: string;
   client_name?: string; // To be populated client-side
 }
@@ -34,25 +31,31 @@ export default function CampaignManagement() {
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
-  // Add states for Create/Edit Campaign Dialogs if you implement them here
-  // const [isCreateCampaignDialogOpen, setIsCreateCampaignDialogOpen] = useState(false);
-  // const [editingCampaign, setEditingCampaign] = useState<CampaignSummary | null>(null);
+  
+  const [isCreateCampaignDialogOpen, setIsCreateCampaignDialogOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<CampaignSummaryForManagement | null>(null);
+  const [isEditCampaignDialogOpen, setIsEditCampaignDialogOpen] = useState(false);
 
-  const { data: people = [], isLoading: isLoadingPeople } = useQuery<PersonSummary[]>({
-    queryKey: ["/people/"], // Fetch all people to link names
+  const { data: peopleData = [], isLoading: isLoadingPeople } = useQuery<PersonSummaryForCampaignManagement[]>({
+    queryKey: ["/people/"], // Fetch all people to link names and for dialogs
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/people/");
+      if (!response.ok) throw new Error("Failed to fetch people");
+      return response.json();
+    }
   });
 
-  const { data: campaigns = [], isLoading: isLoadingCampaigns, error } = useQuery<CampaignSummary[]>({
+  const { data: campaignsData = [], isLoading: isLoadingCampaigns, error } = useQuery<CampaignSummaryForManagement[]>({
     queryKey: ["allCampaignsForManagement"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/campaigns/"); // Fetches all campaigns
+      const response = await apiRequest("GET", "/campaigns/"); 
       if (!response.ok) throw new Error("Failed to fetch campaigns");
       return response.json();
     },
   });
 
-  const campaignsWithClientNames = campaigns.map(campaign => {
-    const client = people.find(p => p.person_id === campaign.person_id);
+  const campaignsWithClientNames = campaignsData.map(campaign => {
+    const client = peopleData.find(p => p.person_id === campaign.person_id);
     return { ...campaign, client_name: client?.full_name || `Client ID: ${campaign.person_id}` };
   });
 
@@ -62,9 +65,57 @@ export default function CampaignManagement() {
     campaign.campaign_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  // Delete mutation (similar to AdminPanel.tsx)
-  const deleteCampaignMutation = useMutation({ /* ... */ });
-  const handleDeleteCampaign = (campaignId: string) => { /* ... */ };
+  const deleteCampaignMutation = useMutation<Response, Error, string>({
+    mutationFn: (campaignId: string) => apiRequest("DELETE", `/campaigns/${campaignId}`),
+    onSuccess: (response, campaignId) => {
+      if (!response.ok) { // Check if response is not OK if API might return error details in body
+        // Try to parse error if possible, otherwise use a generic message
+        response.json().then(err => {
+          toast({ title: "Error Deleting Campaign", description: err.detail || `Failed to delete campaign ${campaignId}.`, variant: "destructive" });
+        }).catch(() => {
+          toast({ title: "Error Deleting Campaign", description: `Failed to delete campaign ${campaignId}. Status: ${response.status}`, variant: "destructive" });
+        });
+        return; // Important: stop further processing on error
+      }
+      toast({ title: "Success", description: "Campaign deleted successfully" });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["allCampaignsForManagement"] });
+    },
+    onError: (error: Error, campaignId) => {
+      toast({ title: "Error Deleting Campaign", description: `${error.message} (ID: ${campaignId})`, variant: "destructive" });
+    }
+  });
+
+  const handleDeleteCampaign = (campaignId: string) => {
+    if (window.confirm("Are you sure you want to delete this campaign? This action cannot be undone and might affect associated data.")) {
+      deleteCampaignMutation.mutate(campaignId);
+    }
+  };
+
+  const handleEditCampaign = (campaign: CampaignSummaryForManagement) => {
+    setEditingCampaign(campaign);
+    setIsEditCampaignDialogOpen(true);
+  };
+  
+  // Copied from AdminPanel for consistency, ensure it matches the backend logic
+  const processCampaignContentMutation = useMutation<any, Error, string>({
+    mutationFn: async (campaignId: string) => {
+      toast({ title: "Task Triggered", description: `Attempting to process content for campaign: ${campaignId}...` });
+      const response = await apiRequest("POST", `/tasks/run/process_campaign_content?campaign_id=${campaignId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: `Failed to trigger content processing for campaign ${campaignId}` }));
+        throw new Error(errorData.detail);
+      }
+      return response.json();
+    },
+    onSuccess: (data, campaignId) => {
+      toast({ title: "Task Success", description: data.message || `Campaign content processing initiated for ${campaignId}.` });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["allCampaignsForManagement"] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", campaignId] });
+    },
+    onError: (error: Error, campaignId) => {
+      toast({ title: "Task Failed", description: `Error processing content for campaign '${campaignId}': ${error.message}`, variant: "destructive" });
+    },
+  });
 
 
   if (isLoadingPeople || isLoadingCampaigns) {
@@ -92,10 +143,9 @@ export default function CampaignManagement() {
           </h1>
           <p className="text-gray-600">Oversee all client campaigns and their progress.</p>
         </div>
-        {/* <Button onClick={() => setIsCreateCampaignDialogOpen(true)}>
+        <Button onClick={() => setIsCreateCampaignDialogOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="mr-2 h-4 w-4" /> Create New Campaign
-        </Button> */}
-        {/* TODO: Add CreateCampaignDialog instance here, passing `people` list for client selection */}
+        </Button>
       </div>
 
       <Card>
@@ -120,13 +170,14 @@ export default function CampaignManagement() {
                   <TableHead>Client</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Keywords</TableHead>
+                  <TableHead>Embedding Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCampaigns.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-4">No campaigns found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-4">No campaigns found.</TableCell></TableRow>
                 ) : (
                   filteredCampaigns.map((campaign) => (
                     <TableRow key={campaign.campaign_id}>
@@ -134,6 +185,21 @@ export default function CampaignManagement() {
                       <TableCell>{campaign.client_name}</TableCell>
                       <TableCell>{campaign.campaign_type || "N/A"}</TableCell>
                       <TableCell className="max-w-xs truncate">{(campaign.campaign_keywords || []).join(', ') || "N/A"}</TableCell>
+                      <TableCell>
+                        {campaign.embedding_status ? (
+                          <Badge 
+                            variant={
+                              campaign.embedding_status === 'completed' ? 'default' :
+                              campaign.embedding_status === 'pending' ? 'outline' :
+                              campaign.embedding_status === 'failed' ? 'destructive' :
+                              'secondary'
+                            }
+                            className={`capitalize text-xs ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''}`}
+                          >
+                            {campaign.embedding_status.replace(/_/g, ' ')}
+                          </Badge>
+                        ) : <Badge variant="secondary" className="text-xs">N/A</Badge>}
+                      </TableCell>
                       <TableCell>{new Date(campaign.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-1">
@@ -142,13 +208,15 @@ export default function CampaignManagement() {
                                 <ArrowRight className="h-3 w-3" />
                             </Button>
                           </Link>
-                          {/* <Button size="sm" variant="outline" onClick={() => setEditingCampaign(campaign)} title="Edit Campaign">
+                          <Button size="sm" variant="outline" onClick={() => handleEditCampaign(campaign)} title="Edit Campaign">
                             <Edit className="h-3 w-3" />
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDeleteCampaign(campaign.campaign_id)} title="Delete Campaign">
+                           <Button size="sm" variant="outline" onClick={() => processCampaignContentMutation.mutate(campaign.campaign_id)} title="Re-process Campaign Content & Embedding" disabled={processCampaignContentMutation.isPending && processCampaignContentMutation.variables === campaign.campaign_id}>
+                            <RefreshCw className={`h-3 w-3 ${processCampaignContentMutation.isPending && processCampaignContentMutation.variables === campaign.campaign_id ? 'animate-spin' : ''}`} />
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteCampaign(campaign.campaign_id)} title="Delete Campaign" disabled={deleteCampaignMutation.isPending && deleteCampaignMutation.variables === campaign.campaign_id}>
                             <Trash2 className="h-3 w-3" />
-                          </Button> */}
-                          {/* TODO: Add EditCampaignDialog instance here */}
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -159,6 +227,27 @@ export default function CampaignManagement() {
           </div>
         </CardContent>
       </Card>
+
+      <CreateCampaignDialog 
+        people={peopleData}
+        open={isCreateCampaignDialogOpen}
+        onOpenChange={setIsCreateCampaignDialogOpen}
+        onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["allCampaignsForManagement"] })}
+      />
+
+      {editingCampaign && (
+        <EditCampaignDialog 
+            campaign={editingCampaign} 
+            people={peopleData}
+            open={isEditCampaignDialogOpen} 
+            onOpenChange={setIsEditCampaignDialogOpen} 
+            onSuccess={() => {
+                tanstackQueryClient.invalidateQueries({ queryKey: ["allCampaignsForManagement"] });
+                setEditingCampaign(null); // Clear editing state
+            }}
+        />
+      )}
+
     </div>
   );
 }

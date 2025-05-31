@@ -32,6 +32,9 @@ export interface ReviewTask {
   client_name?: string;
   media_url?: string; // e.g., podcast website
   pitch_draft_preview?: string;
+  // --- Fields for Match Suggestion display ---
+  match_score?: number | null;
+  ai_reasoning?: string | null;
 }
 
 // --- From podcast_outreach/api/schemas/match_schemas.py ---
@@ -170,12 +173,16 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
       let clientName = "N/A";
       let mediaUrl: string | undefined = undefined;
       let pitchDraftPreview: string | undefined = undefined;
+      let matchScore: number | null | undefined = undefined;
+      let aiReasoning: string | null | undefined = undefined;
 
       try {
         if (task.task_type === 'match_suggestion') {
           const matchRes = await apiRequest("GET", `/match-suggestions/${task.related_id}`);
           if (!matchRes.ok) throw new Error(`Failed to fetch match suggestion (${matchRes.status})`);
           const match: MatchSuggestion = await matchRes.json();
+          matchScore = match.match_score;
+          aiReasoning = match.ai_reasoning;
 
           if (match.media_id) {
             const mediaRes = await apiRequest("GET", `/media/${match.media_id}`);
@@ -248,7 +255,7 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
         // Let the error propagate to useQuery's error state
         throw err;
       }
-      return { entityName, campaignName, clientName, mediaUrl, pitchDraftPreview };
+      return { entityName, campaignName, clientName, mediaUrl, pitchDraftPreview, match_score: matchScore, ai_reasoning: aiReasoning };
     },
     enabled: !!task.related_id,
     staleTime: 1000 * 60 * 5,
@@ -352,6 +359,11 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
                 {currentStatusConfig.label}
               </Badge>
               <Badge variant="outline" className="capitalize text-xs px-2 py-0.5">{task.task_type.replace('_', ' ')}</Badge>
+              {task.task_type === 'match_suggestion' && typeof relatedData?.match_score === 'number' && (
+                <Badge variant="default" className="text-xs bg-blue-600 text-white">
+                    Score: {Math.round(relatedData.match_score * 100)}%
+                </Badge>
+              )}
             </div>
             <CardTitle className="text-base md:text-md leading-tight">{relatedData?.entityName || `Task for ID: ${task.related_id}`}</CardTitle>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -363,6 +375,14 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
       </CardHeader>
       
       <CardContent className="space-y-2.5 text-sm pt-0">
+        {task.task_type === 'match_suggestion' && relatedData?.ai_reasoning && (
+            <div className="bg-indigo-50 p-2.5 rounded-md border border-indigo-200">
+                <h4 className="text-xs font-semibold text-indigo-700 mb-1 flex items-center">
+                    <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> AI-Generated Reasoning:
+                </h4>
+                <p className="text-indigo-800 text-xs whitespace-pre-wrap">{relatedData.ai_reasoning}</p>
+            </div>
+        )}
         {task.task_type === 'pitch_review' && relatedData?.pitchDraftPreview && (
           <div className="bg-gray-50 p-2.5 rounded-md border border-gray-200">
             <h4 className="text-xs font-semibold text-gray-500 mb-1">PITCH DRAFT PREVIEW:</h4>

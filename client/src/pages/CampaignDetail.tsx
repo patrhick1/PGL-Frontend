@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Edit, ExternalLink, Lightbulb, Search, CheckCircle, Send, TrendingUp,
-  ClipboardList, AlertTriangle, Info, Users, FileText, MessageSquare, PlayCircle, ThumbsUp, ThumbsDown
+  ClipboardList, AlertTriangle, Info, Users, FileText, MessageSquare, PlayCircle, ThumbsUp, ThumbsDown, RefreshCw
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator"; // Added Separator
+import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // --- Interfaces (Ensure these match your actual backend responses) ---
 interface CampaignDetailData {
@@ -24,6 +26,7 @@ interface CampaignDetailData {
   campaign_bio?: string | null; // GDoc Link
   campaign_angles?: string | null; // GDoc Link
   campaign_keywords?: string[] | null;
+  embedding_status?: string | null; // Added
   mock_interview_trancript?: string | null; // Text or GDoc Link
   media_kit_url?: string | null;
   questionnaire_responses?: object | null; // To check if questionnaire is filled
@@ -73,7 +76,10 @@ interface CampaignDetailProps {
 
 // --- Tab Content Components (Can be moved to separate files) ---
 
-function CampaignOverviewTab({ campaign }: { campaign: CampaignDetailData }) {
+function CampaignOverviewTab({ campaign, onReprocess }: { campaign: CampaignDetailData; onReprocess: () => void; }) {
+  const { user } = useAuth();
+  const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
+
   return (
     <Card>
       <CardHeader>
@@ -81,19 +87,49 @@ function CampaignOverviewTab({ campaign }: { campaign: CampaignDetailData }) {
         <CardDescription>Key details and settings for this campaign.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <p><strong>Campaign Name:</strong> {campaign.campaign_name}</p>
-        <p><strong>Client:</strong> {campaign.client_full_name || `Person ID: ${campaign.person_id}`}</p>
-        <p><strong>Campaign Type:</strong> {campaign.campaign_type || "N/A"}</p>
-        <p><strong>Keywords:</strong> {(campaign.campaign_keywords || []).join(', ') || "Not set"}</p>
-        <p><strong>Media Kit URL:</strong>
-          {campaign.media_kit_url ?
-            <a href={campaign.media_kit_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
-              View Media Kit <ExternalLink className="inline h-3 w-3"/>
-            </a>
-            : " Not provided"}
-        </p>
-        <p><strong>Created:</strong> {new Date(campaign.created_at).toLocaleDateString()}</p>
-        {/* Add Edit button for Staff/Admin */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+            <p><strong>Campaign Name:</strong> {campaign.campaign_name}</p>
+            <p><strong>Client:</strong> {campaign.client_full_name || `Person ID: ${campaign.person_id}`}</p>
+            <p><strong>Campaign Type:</strong> {campaign.campaign_type || "N/A"}</p>
+            <p><strong>Created:</strong> {new Date(campaign.created_at).toLocaleDateString()}</p>
+            <div>
+                <span className="font-semibold">Keywords: </span>
+                {campaign.campaign_keywords && campaign.campaign_keywords.length > 0 ? 
+                    campaign.campaign_keywords.map(kw => <Badge key={kw} variant="secondary" className="mr-1 mb-1">{kw}</Badge>) : 
+                    <span className="text-gray-500">Not set</span>}
+            </div>
+            <div>
+                <span className="font-semibold">Embedding Status: </span>
+                {campaign.embedding_status ? (
+                    <Badge 
+                      variant={
+                        campaign.embedding_status === 'completed' ? 'default' :
+                        campaign.embedding_status === 'pending' ? 'outline' :
+                        campaign.embedding_status === 'failed' ? 'destructive' :
+                        campaign.embedding_status === 'not_enough_content' ? 'secondary' :
+                        'secondary'
+                      }
+                      className={`capitalize ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : campaign.embedding_status === 'not_enough_content' ? 'bg-orange-100 text-orange-700' : ''}`}
+                    >
+                        {campaign.embedding_status.replace(/_/g, ' ')}
+                    </Badge>
+                    ) : <Badge variant="secondary">Not Started</Badge>}
+            </div>
+            <p className="md:col-span-2"><strong>Media Kit URL:</strong>
+            {campaign.media_kit_url ?
+                <a href={campaign.media_kit_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+                View Media Kit <ExternalLink className="inline h-3 w-3"/>
+                </a>
+                : " Not provided"}
+            </p>
+        </div>
+        {isAdminOrStaff && (
+            <div className="mt-4 pt-4 border-t">
+                <Button onClick={onReprocess} size="sm">
+                    <RefreshCw className="mr-2 h-4 w-4" /> Re-process Campaign Content & Embedding
+                </Button>
+            </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -192,8 +228,9 @@ function ProfileContentTab({ campaign, userRole }: { campaign: CampaignDetailDat
 function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userRole: string | null }) {
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('desc'); // For sorting
 
-  const { data: matches = [], isLoading, error } = useQuery<MatchSuggestionForCampaign[]>({
+  const { data: rawMatches = [], isLoading, error } = useQuery<MatchSuggestionForCampaign[]>({
     queryKey: ["campaignMatchesDetail", campaignId],
     queryFn: async () => {
       const response = await apiRequest("GET", `/match-suggestions/campaign/${campaignId}`);
@@ -201,7 +238,7 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
       const matchData: any[] = await response.json();
       // Enrich with media name if not already joined by backend
       return Promise.all(matchData.map(async (m: any) => {
-          if (m.media_id && !m.media_name) { // Check if media_name is missing
+          if (m.media_id && !m.media_name) { 
               try {
                 const mediaRes = await apiRequest("GET", `/media/${m.media_id}`);
                 if (mediaRes.ok) {
@@ -214,6 +251,13 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
           return m as MatchSuggestionForCampaign;
       }));
     },
+  });
+
+  const matches = [...rawMatches].sort((a, b) => {
+    if (sortOrder === 'none') return 0;
+    const scoreA = a.match_score ?? -1;
+    const scoreB = b.match_score ?? -1;
+    return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
   });
 
   const approveMatchMutation = useMutation({
@@ -242,8 +286,26 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Podcast Matches</CardTitle>
-        <CardDescription>Podcasts suggested or vetted for this campaign.</CardDescription>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div>
+                <CardTitle>Podcast Matches</CardTitle>
+                <CardDescription>Podcasts suggested or vetted for this campaign.</CardDescription>
+            </div>
+            {matches.length > 0 && (
+                <div className="mt-2 sm:mt-0">
+                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as typeof sortOrder)}>
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs h-9">
+                        <SelectValue placeholder="Sort by score" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="desc">Score: High to Low</SelectItem>
+                        <SelectItem value="asc">Score: Low to High</SelectItem>
+                        <SelectItem value="none">Default Order</SelectItem>
+                      </SelectContent>
+                    </Select>
+                </div>
+            )}
+        </div>
       </CardHeader>
       <CardContent>
         {matches.length === 0 ? (
@@ -261,14 +323,20 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
             {matches.map(match => (
               <Card key={match.match_id} className="p-4">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center">
-                  <div className="mb-2 sm:mb-0">
+                  <div className="mb-2 sm:mb-0 flex-1">
                     <h4 className="font-semibold text-md">{match.media_name || `Media ID: ${match.media_id}`}</h4>
-                    <p className="text-xs text-gray-500">Match Score: {match.match_score?.toFixed(2) || "N/A"} | Status: <Badge variant={match.status === 'approved' ? 'default' : 'outline'} className="capitalize">{match.status.replace('_', ' ')}</Badge></p>
-                    {match.ai_reasoning && <p className="text-xs text-gray-600 mt-1 italic line-clamp-2">AI Reasoning: {match.ai_reasoning}</p>}
+                    <div className="text-xs text-gray-500 flex items-center gap-x-2 flex-wrap mt-0.5">
+                        <span>Status: <Badge variant={match.status === 'approved' ? 'default' : 'outline'} className={`capitalize text-xs px-1.5 py-0.5 ${match.status === 'approved' ? 'bg-green-100 text-green-700' : ''}`}>{match.status.replace('_', ' ')}</Badge></span>
+                        {typeof match.match_score === 'number' && (
+                            <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5">
+                                Match Score: {Math.round(match.match_score * 100)}%
+                            </Badge>
+                        )}
+                    </div>
                   </div>
-                  <div className="flex space-x-2 flex-shrink-0">
-                    {match.media_website && <Button variant="ghost" size="sm" asChild><a href={match.media_website} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4"/></a></Button>}
-                    {(userRole === 'client' && match.status === 'pending') && (
+                  <div className="flex space-x-2 flex-shrink-0 sm:ml-4 mt-2 sm:mt-0">
+                    {match.media_website && <Button variant="ghost" size="icon" asChild className="h-8 w-8"><a href={match.media_website} target="_blank" rel="noopener noreferrer" title="Visit Website"><ExternalLink className="h-4 w-4"/></a></Button>}
+                    {userRole === 'client' && match.status === 'pending' && (
                       <>
                         <Button size="sm" onClick={() => approveMatchMutation.mutate(match.match_id)} disabled={approveMatchMutation.isPending} className="bg-green-500 hover:bg-green-600 text-white">
                             <ThumbsUp className="h-4 w-4 mr-1"/> Approve
@@ -283,6 +351,14 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
                     )}
                   </div>
                 </div>
+                {match.ai_reasoning && 
+                    <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                        <h5 className="text-xs font-semibold text-gray-600 mb-0.5 flex items-center">
+                          <Lightbulb className="h-3.5 w-3.5 mr-1.5 text-yellow-500 shrink-0" /> AI Reasoning:
+                        </h5> 
+                        <p className="text-xs text-gray-700 bg-gray-50 p-2 rounded-md border border-gray-100 whitespace-pre-wrap break-words">{match.ai_reasoning}</p>
+                    </div>
+                }
               </Card>
             ))}
           </div>
@@ -397,8 +473,9 @@ export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps)
   const campaignId = campaignIdParam; // Use the passed prop
   const { user, isLoading: authLoading } = useAuth();
   const tanstackQueryClient = useTanstackQueryClient();
+  const { toast } = useToast(); // Added toast for reprocess button
 
-  const { data: campaign, isLoading, error } = useQuery<CampaignDetailData>({
+  const { data: campaign, isLoading, error, refetch: refetchCampaignDetail } = useQuery<CampaignDetailData>({
     queryKey: ["campaignDetail", campaignId],
     queryFn: async () => {
       if (!campaignId) throw new Error("Campaign ID is missing");
@@ -421,6 +498,33 @@ export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps)
       return campaignData;
     },
     enabled: !!campaignId && !authLoading && !!user,
+  });
+
+  const reprocessCampaignMutation = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error("Campaign ID is missing.");
+      // API: POST /tasks/run/process_campaign_content?campaign_id={campaign.campaign_id}
+      const response = await apiRequest("POST", `/tasks/run/process_campaign_content?campaign_id=${campaignId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({detail: "Failed to trigger campaign reprocessing."}));
+        throw new Error(errorData.detail);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Reprocessing Initiated", description: "Campaign content reprocessing started. Status will update shortly." });
+      // Optionally, set a timeout to refetch campaign details after a few seconds
+      // or rely on websockets if you implement real-time status updates.
+      setTimeout(() => {
+        tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", campaignId] });
+         // Also invalidate lists that might show embedding_status
+        tanstackQueryClient.invalidateQueries({ queryKey: ["allCampaignsForManagement"] });
+        tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage"] }); 
+      }, 3000); // Refetch after 3s
+    },
+    onError: (error: any) => {
+      toast({ title: "Error Reprocessing", description: error.message || "Failed to start reprocessing.", variant: "destructive" });
+    },
   });
 
   if (authLoading || isLoading) {
@@ -504,7 +608,7 @@ export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps)
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-          <CampaignOverviewTab campaign={campaign} />
+          <CampaignOverviewTab campaign={campaign} onReprocess={() => reprocessCampaignMutation.mutate()} />
         </TabsContent>
         <TabsContent value="profileContent" className="mt-6">
           <ProfileContentTab campaign={campaign} userRole={user?.role || null} />

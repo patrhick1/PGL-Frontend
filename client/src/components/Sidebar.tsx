@@ -17,7 +17,8 @@ import {
   Users as ClientsIcon, 
   LayoutGrid,
   // Sparkles, // Icon for AI Content Tools if it becomes a top-level item
-  Send
+  Send,
+  FileText as PitchTemplateIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,6 +54,7 @@ const internalNavigationItems: NavigationItem[] = [
   { name: "Approval Queue", href: "/approvals", icon: CheckCircle, roles: ['staff', 'admin'] }, // Staff sees all relevant approvals
   { name: "Placement Management", href: "/placement-tracking", icon: TrendingUp, roles: ['staff', 'admin'] },
   // { name: "Reporting", href: "/reports", icon: BarChart3, roles: ['staff', 'admin'] }, // Future
+  { name: "Pitch Templates", href: "/pitch-templates", icon: PitchTemplateIcon, roles: ['staff', 'admin'] }, 
   { name: "Admin Panel", href: "/admin", icon: Shield, roles: ['admin'] },
 ];
 
@@ -68,8 +70,8 @@ export default function Sidebar() {
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/auth/logout", {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/auth/me"] });
-      queryClient.clear(); // Clear all query cache on logout
+      queryClient.setQueryData(["/auth/me"], null);
+      queryClient.clear(); // Clear all other query cache on logout
       setLocation("/login", { replace: true });
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     },

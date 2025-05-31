@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ClipboardList, BookOpen, Save, AlertTriangle, Lightbulb, Info, ArrowLeft } from "lucide-react";
 import Questionnaire from "./Questionnaire"; // Assuming Questionnaire.tsx is now a component for the form logic
 import AnglesGenerator from "./AnglesGenerator"; // Assuming AnglesGenerator.tsx is now a component
+import { Badge } from "@/components/ui/badge";
 
 // Schema for just the Media Kit URL part
 const mediaKitUrlSchema = z.object({
@@ -33,7 +34,8 @@ interface ClientCampaignForSetup {
   mock_interview_trancript?: string | null; // Added to check if questionnaire was processed
   campaign_bio?: string | null;
   campaign_angles?: string | null;
-  campaign_keywords?: string[] | null; // Added
+  campaign_keywords?: string[] | null;
+  embedding_status?: 'pending' | 'completed' | 'failed' | 'not_started' | 'not_enough_content' | string | null; // Updated and expanded
 }
 
 export default function ProfileSetup() {
@@ -49,7 +51,7 @@ export default function ProfileSetup() {
   const [activeTab, setActiveTab] = useState<string>("questionnaire");
 
 
-  const { data: campaigns = [], isLoading: isLoadingCampaigns } = useQuery<ClientCampaignForSetup[]>({
+  const { data: campaigns = [], isLoading: isLoadingCampaigns, refetch: refetchCampaigns } = useQuery<ClientCampaignForSetup[]>({
     queryKey: ["clientCampaignsForProfileSetupPage", user?.person_id],
     queryFn: async () => {
       if (!user?.person_id) return [];
@@ -92,7 +94,7 @@ export default function ProfileSetup() {
       const payload = { 
         media_kit_url: data.media_kit_url || null,
         // Preserve other fields that might be on the update schema but not part of this form
-        campaign_keywords: currentCampaign?.campaign_keywords, 
+        // campaign_keywords and embedding_status should be updated by the backend process, not directly by client here.
       };
       return apiRequest("PUT", `/campaigns/${selectedCampaignId}`, payload);
     },
@@ -103,7 +105,7 @@ export default function ProfileSetup() {
       }
       tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage", user?.person_id] });
       tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] }); // If CampaignDetail uses this
-      toast({ title: "Success", description: "Media kit URL updated." });
+      toast({ title: "Success", description: "Media kit URL updated. Your profile will be re-processed if necessary." });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Failed to update media kit URL.", variant: "destructive" });
@@ -150,7 +152,7 @@ export default function ProfileSetup() {
           <FormItem className="mb-6">
             <FormLabel>Select Campaign to Setup/Update</FormLabel>
             <Select 
-                onValueChange={(value: string) => setSelectedCampaignId(value === "none" ? null : value)}
+                onValueChange={handleCampaignChange}
                 value={selectedCampaignId || ""}
             >
               <FormControl><SelectTrigger disabled={isLoadingCampaigns || campaigns.length === 0}>
@@ -171,6 +173,51 @@ export default function ProfileSetup() {
           </FormItem>
 
           {selectedCampaignId && selectedCampaignData ? (
+            <>
+            <Card className="mb-6 border-l-4 border-primary">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center">
+                  <Info className="h-5 w-5 mr-2 text-primary" /> Campaign Profile Strength
+                </CardTitle>
+                <CardDescription>This section shows the consolidated keywords and processing status for your selected campaign, indicating its readiness for effective podcast matching.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <h4 className="font-medium text-sm mb-1">Consolidated Keywords:</h4>
+                  {selectedCampaignData.campaign_keywords && selectedCampaignData.campaign_keywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCampaignData.campaign_keywords.map(kw => (
+                        <Badge key={kw} variant="default" className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200">{kw}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No keywords processed yet. Complete the questionnaire or AI Bio & Angles for this campaign.</p>
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm mb-1">Profile Enhancement Status:</h4>
+                  {selectedCampaignData.embedding_status ? (
+                    <Badge 
+                      variant={
+                        selectedCampaignData.embedding_status === 'completed' ? 'default' :
+                        selectedCampaignData.embedding_status === 'pending' ? 'outline' :
+                        selectedCampaignData.embedding_status === 'failed' ? 'destructive' :
+                        selectedCampaignData.embedding_status === 'not_enough_content' ? 'secondary' : // Example for new status
+                        'secondary' // Default for other string values
+                      }
+                      className={`capitalize text-sm px-3 py-1 ${selectedCampaignData.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : selectedCampaignData.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selectedCampaignData.embedding_status === 'not_enough_content' ? 'bg-orange-100 text-orange-700' : ''}`}
+                    >
+                      {selectedCampaignData.embedding_status.replace(/_/g, ' ')}
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-sm">Not Started</Badge>
+                  )}
+                  {selectedCampaignData.embedding_status === 'not_enough_content' && 
+                    <p className="text-xs text-orange-600 mt-1">Consider adding more details to your questionnaire or generating bio & angles to improve profile strength.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                 <TabsTrigger value="questionnaire"><ClipboardList className="mr-2 h-4 w-4"/>Questionnaire</TabsTrigger>
@@ -183,8 +230,13 @@ export default function ProfileSetup() {
               <TabsContent value="questionnaire" className="mt-6">
                 {/* Pass selectedCampaignId and selectedCampaignData to Questionnaire if it needs them */}
                 <Questionnaire 
-                  // campaignId={selectedCampaignId} 
+                  campaignId={selectedCampaignId} 
                   // initialData={selectedCampaignData.questionnaire_responses} 
+                  onSuccessfulSubmit={() => {
+                    toast({ title: "Questionnaire Submitted!", description: "We are now processing your information to enhance matching and content generation. This may take a few moments." }); // Updated Feedback
+                    refetchCampaigns(); // Refetch campaign data to show updated keywords/status
+                    tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
+                  }}
                 />
               </TabsContent>
 
@@ -222,7 +274,14 @@ export default function ProfileSetup() {
               <TabsContent value="aiBioAngles" className="mt-6">
                 {selectedCampaignData?.questionnaire_responses || selectedCampaignData?.mock_interview_trancript ? (
                     // AnglesGenerator needs to be adapted to take selectedCampaignId or be aware of it
-                    <AnglesGenerator /* campaignId={selectedCampaignId} */ />
+                    <AnglesGenerator 
+                      campaignId={selectedCampaignId} 
+                      onSuccessfulGeneration={() => {
+                        toast({ title: "Bio & Angles Generated!", description: "We are now processing this new content to further enhance matching."}); // Updated Feedback
+                        refetchCampaigns(); // Refetch campaign data
+                        tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
+                      }}
+                    />
                 ) : (
                     <Card>
                         <CardContent className="p-6 text-center text-gray-500">
@@ -233,6 +292,7 @@ export default function ProfileSetup() {
                 )}
               </TabsContent>
             </Tabs>
+            </>
           ) : (
             campaigns.length > 0 && <p className="text-center text-gray-500 py-6">Select a campaign above to manage its profile content.</p>
           )}

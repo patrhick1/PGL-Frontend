@@ -56,6 +56,7 @@ interface StaffDiscoveredMatch {
   media_website?: string | null;
   campaign_name?: string | null; // Should be populated by backend if possible
   client_name?: string | null;   // Should be populated by backend if possible
+  // Potentially add best_episode_link or similar if backend provides it for AI reasoning context
 }
 
 export default function PodcastDiscovery() {
@@ -66,6 +67,7 @@ export default function PodcastDiscovery() {
 
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [staffDiscoveredMatches, setStaffDiscoveredMatches] = useState<StaffDiscoveredMatch[]>([]);
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('desc'); // For match_score sorting
 
   // --- Client-Specific State & Queries ---
   const [clientDiscoveredPodcastPreviews, setClientDiscoveredPodcastPreviews] = useState<PodcastPreview[]>([]);
@@ -198,9 +200,17 @@ export default function PodcastDiscovery() {
       toast({ title: "Campaign Required", description: "Please select a client campaign to run discovery for.", variant: "destructive" });
       return;
     }
-    setStaffDiscoveredMatches([]);
+    setStaffDiscoveredMatches([]); // Clear previous results before new fetch
+    setSortOrder('desc'); // Reset sort order
     staffAdminDiscoverForCampaignMutation.mutate(selectedCampaignId);
   };
+
+  const sortedStaffDiscoveredMatches = [...staffDiscoveredMatches].sort((a, b) => {
+    if (sortOrder === 'none') return 0;
+    const scoreA = a.match_score ?? -1; // Treat null/undefined as lowest score
+    const scoreB = b.match_score ?? -1;
+    return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+  });
 
   // --- Render Logic ---
   if (authLoading || (userRoleLower === 'client' && (isLoadingClientCampaigns || isLoadingStatus))) {
@@ -330,14 +340,29 @@ export default function PodcastDiscovery() {
           {staffAdminDiscoverForCampaignMutation.isSuccess && staffDiscoveredMatches.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Discovery Results & Suggestions Created ({staffDiscoveredMatches.length})</CardTitle>
-                <CardDescription>
-                  The following match suggestions were created for the campaign '{clientCampaigns.find(c => c.campaign_id === selectedCampaignId)?.campaign_name || 'Selected Campaign'}'.
-                  These are now in the review queue for further vetting by the team.
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                  <div>
+                    <CardTitle>Discovery Results & Suggestions Created ({staffDiscoveredMatches.length})</CardTitle>
+                    <CardDescription>
+                      Displaying matches for '{clientCampaigns.find(c => c.campaign_id === selectedCampaignId)?.campaign_name || 'Selected Campaign'}'.
+                    </CardDescription>
+                  </div>
+                  <div className="mt-2 sm:mt-0">
+                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as typeof sortOrder)}>
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs h-9">
+                        <SelectValue placeholder="Sort by score" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="desc">Score: High to Low</SelectItem>
+                        <SelectItem value="asc">Score: Low to High</SelectItem>
+                        <SelectItem value="none">Default Order</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-                {staffDiscoveredMatches.map(match => ( 
+              <CardContent className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+                {sortedStaffDiscoveredMatches.map(match => ( 
                     <Card key={match.match_id} className="p-4 text-sm border rounded-lg shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex flex-col sm:flex-row justify-between">
                             <div className="flex-1 mb-2 sm:mb-0">
@@ -350,14 +375,19 @@ export default function PodcastDiscovery() {
                                         href={match.media_website}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs text-blue-600 hover:underline inline-flex items-center mt-1"
+                                        className="text-xs text-primary hover:underline inline-flex items-center mt-1"
                                     >
                                         <ExternalLink className="inline h-3 w-3 mr-1"/>Visit Website
                                     </a>
                                 )}
                             </div>
-                            <div className="flex-shrink-0 text-right">
-                                <Badge variant="outline" className="text-xs capitalize">
+                            <div className="flex-shrink-0 sm:text-right">
+                                {typeof match.match_score === 'number' && (
+                                    <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-700 text-white mb-1 sm:ml-auto block w-fit px-2.5 py-1">
+                                        Match Score: {Math.round(match.match_score * 100)}%
+                                    </Badge>
+                                )}
+                                <Badge variant="outline" className="text-xs capitalize block w-fit sm:ml-auto">
                                     Status: {match.status ? match.status.replace('_', ' ') : 'N/A'}
                                 </Badge>
                                 <p className="text-xs text-gray-400 mt-1">
@@ -366,13 +396,15 @@ export default function PodcastDiscovery() {
                             </div>
                         </div>
                         {match.ai_reasoning && (
-                            <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-100 italic line-clamp-3">
-                                <Lightbulb className="inline h-3.5 w-3.5 mr-1 text-yellow-500" />
-                                AI Reasoning: {match.ai_reasoning}
-                            </p>
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                                <h5 className="text-xs font-semibold text-gray-600 mb-0.5 flex items-center">
+                                  <Lightbulb className="inline h-3.5 w-3.5 mr-1 text-yellow-500 shrink-0" /> AI Reasoning:
+                                </h5> 
+                                <p className="text-xs text-gray-700 bg-gray-50 p-2 rounded-md border border-gray-100 whitespace-pre-wrap break-words">{match.ai_reasoning}</p>
+                            </div>
                         )}
                         {match.matched_keywords && match.matched_keywords.length > 0 && (
-                            <div className="mt-2">
+                            <div className="mt-2 pt-2 border-t border-gray-200">
                                 <span className="text-xs font-medium text-gray-500">Matched Keywords: </span>
                                 {match.matched_keywords.map(kw => (
                                     <Badge key={kw} variant="secondary" className="mr-1 text-xs">{kw}</Badge>
@@ -383,6 +415,11 @@ export default function PodcastDiscovery() {
                             <Link href={`/approvals?match_id=${match.match_id}`}> 
                                 <Button size="sm" variant="ghost" className="text-xs text-primary hover:text-primary/80">
                                     View/Review Suggestion <ArrowRight className="ml-1 h-3 w-3"/>
+                                </Button>
+                            </Link>
+                            <Link href={`/media/${match.media_id}`}> 
+                                <Button size="sm" variant="outline" className="text-xs ml-2">
+                                    View Podcast Details <ExternalLink className="ml-1 h-3 w-3"/>
                                 </Button>
                             </Link>
                         </div>
