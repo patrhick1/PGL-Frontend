@@ -196,7 +196,7 @@ export default function MediaKitPage() {
         </h1>
         {mediaKitData?.slug && mediaKitData.is_public && (
             <Button variant="outline" size="sm" asChild>
-                <a href={`/mk/${mediaKitData.slug}`} target="_blank" rel="noopener noreferrer">
+                <a href={`/media-kit/${mediaKitData.slug}`} target="_blank" rel="noopener noreferrer">
                     <Eye className="mr-2 h-4 w-4"/> Preview Public Page
                 </a>
             </Button>

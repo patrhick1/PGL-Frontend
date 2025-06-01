@@ -206,9 +206,9 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
               <div className="flex justify-between items-center">
                 <CardTitle>Generated & Sourced Content</CardTitle>
                 {mediaKitData.is_public && mediaKitData.slug && (
-                    <RouterLink href={`/public-media-kit/${mediaKitData.slug}`} target="_blank">
+                    <a href={`/media-kit/${mediaKitData.slug}`} target="_blank" rel="noopener noreferrer">
                         <Button variant="outline" size="sm"><ExternalLink className="h-3 w-3 mr-1.5"/> View Public Media Kit</Button>
-                    </RouterLink>
+                    </a>
                 )}
               </div>
               <CardDescription>This content is automatically derived from your campaign questionnaire or GDocs. Edit those sources to update this section.</CardDescription>

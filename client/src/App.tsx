@@ -53,6 +53,9 @@ function Router() {
 
   return (
     <Switch> {/* Outer Switch for auth state */}
+      {/* Public routes accessible to everyone */}
+      <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Public media kit route - accessible to all users */}
+      
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
@@ -60,7 +63,6 @@ function Router() {
           <Route path="/signup" component={SignupPage} />
           <Route path="/reset-password" component={ResetPasswordPage} /> {/* Added reset password route */}
           <Route path="/lead-magnet/questionnaire" component={LeadMagnetQuestionnaire} /> {/* Added public route */}
-          <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Added public media kit route */}
           {/* Redirect any other path to login if not authenticated */}
           <Route>
             <Redirect to="/login" replace />
