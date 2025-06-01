@@ -29,6 +29,11 @@ export default function SignupPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
+  // Get query parameters for lead magnet feature
+  const queryParams = new URLSearchParams(window.location.search);
+  const prospectPersonId = queryParams.get("prospect_person_id");
+  const prospectCampaignId = queryParams.get("prospect_campaign_id");
+
   const form = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -46,6 +51,9 @@ export default function SignupPage() {
         full_name: data.full_name,
         email: data.email,
         password: data.password,
+        // Include prospect data if available for lead magnet
+        ...(prospectPersonId && { prospect_person_id: parseInt(prospectPersonId) }),
+        ...(prospectCampaignId && { prospect_campaign_id: prospectCampaignId }),
         // role: "client" // Backend /auth/register sets role to "client" by default
       };
       // Assuming VITE_API_BASE_URL = http://localhost:8000
@@ -56,11 +64,24 @@ export default function SignupPage() {
         throw new Error(errorData.detail || "Signup failed");
       }
 
-      // const responseData = await response.json(); // Contains user_id and message
-      // console.log("Signup successful:", responseData); // For debugging
+      const responseData = await response.json(); // Contains person_id, campaign_id, and message
+      console.log("Signup successful:", responseData); // For debugging
 
-      toast({ title: "Signup Successful", description: "Please log in with your new account." });
-      navigate("/login");
+      // Show success message based on whether this was a lead magnet conversion
+      const isLeadMagnetConversion = prospectPersonId && prospectCampaignId;
+      toast({ 
+        title: "Signup Successful", 
+        description: isLeadMagnetConversion 
+          ? "Your account has been created! You can now access your personalized campaign." 
+          : "Please log in with your new account." 
+      });
+
+      // For lead magnet conversions, redirect to profile setup with the campaign
+      if (isLeadMagnetConversion && responseData.campaign_id) {
+        navigate(`/login?redirect=/profile-setup&campaignId=${responseData.campaign_id}`);
+      } else {
+        navigate("/login");
+      }
 
     } catch (error: any) {
       toast({
@@ -87,64 +108,62 @@ export default function SignupPage() {
                 <p className="text-gray-600">Join PGL CRM</p>
               </div>
 
-              <form {...form}>
-                <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-6">
-                  <div>
-                    <Label htmlFor="full_name">Full Name</Label>
-                    <Input 
-                      id="full_name" 
-                      {...form.register("full_name")}
-                      placeholder="John Doe" 
-                      className="mt-1"
-                    />
-                    {form.formState.errors.full_name && <p className="text-sm text-red-500 mt-1">{form.formState.errors.full_name.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input 
-                      id="email" 
-                      type="email"
-                      {...form.register("email")}
-                      placeholder="you@example.com" 
-                      className="mt-1"
-                    />
-                     {form.formState.errors.email && <p className="text-sm text-red-500 mt-1">{form.formState.errors.email.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      {...form.register("password")}
-                      placeholder="Create a password" 
-                      className="mt-1"
-                    />
-                     {form.formState.errors.password && <p className="text-sm text-red-500 mt-1">{form.formState.errors.password.message}</p>}
-                  </div>
-                   <div>
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <Input 
-                      id="confirmPassword" 
-                      type="password" 
-                      {...form.register("confirmPassword")}
-                      placeholder="Confirm your password" 
-                      className="mt-1"
-                    />
-                     {form.formState.errors.confirmPassword && <p className="text-sm text-red-500 mt-1">{form.formState.errors.confirmPassword.message}</p>}
-                  </div>
-                  <Button 
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-3 text-base"
-                  >
-                    {isLoading ? "Creating Account..." : (
-                      <>
-                        <UserPlus className="mr-2 h-5 w-5" />
-                        Sign Up
-                      </>
-                    )}
-                  </Button>
-                </form>
+              <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-6">
+                <div>
+                  <Label htmlFor="full_name">Full Name</Label>
+                  <Input 
+                    id="full_name" 
+                    {...form.register("full_name")}
+                    placeholder="John Doe" 
+                    className="mt-1"
+                  />
+                  {form.formState.errors.full_name && <p className="text-sm text-red-500 mt-1">{form.formState.errors.full_name.message}</p>}
+                </div>
+                <div>
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input 
+                    id="email" 
+                    type="email"
+                    {...form.register("email")}
+                    placeholder="you@example.com" 
+                    className="mt-1"
+                  />
+                   {form.formState.errors.email && <p className="text-sm text-red-500 mt-1">{form.formState.errors.email.message}</p>}
+                </div>
+                <div>
+                  <Label htmlFor="password">Password</Label>
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    {...form.register("password")}
+                    placeholder="Create a password" 
+                    className="mt-1"
+                  />
+                   {form.formState.errors.password && <p className="text-sm text-red-500 mt-1">{form.formState.errors.password.message}</p>}
+                </div>
+                 <div>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input 
+                    id="confirmPassword" 
+                    type="password" 
+                    {...form.register("confirmPassword")}
+                    placeholder="Confirm your password" 
+                    className="mt-1"
+                  />
+                   {form.formState.errors.confirmPassword && <p className="text-sm text-red-500 mt-1">{form.formState.errors.confirmPassword.message}</p>}
+                </div>
+                <Button 
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-3 text-base"
+                >
+                  {isLoading ? "Creating Account..." : (
+                    <>
+                      <UserPlus className="mr-2 h-5 w-5" />
+                      Sign Up
+                    </>
+                  )}
+                </Button>
               </form>
 
               <div className="mt-6 text-center">

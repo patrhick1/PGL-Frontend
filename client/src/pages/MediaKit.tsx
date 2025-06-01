@@ -96,7 +96,8 @@ export default function MediaKitPage() {
     queryKey: ["clientCampaignsForMediaKitPage", user?.person_id],
     queryFn: async () => {
       if (!user?.person_id) return [];
-      const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
+      // Clients automatically see only their own campaigns
+      const response = await apiRequest("GET", "/campaigns/");
       if (!response.ok) throw new Error("Failed to fetch campaigns");
       return response.json();
     },

@@ -18,13 +18,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { ClipboardList, BookOpen, Save, AlertTriangle, Lightbulb, Info, ArrowLeft } from "lucide-react";
 import Questionnaire from "./Questionnaire"; // Assuming Questionnaire.tsx is now a component for the form logic
 import AnglesGenerator from "./AnglesGenerator"; // Assuming AnglesGenerator.tsx is now a component
+import MediaKitTab from "@/components/tabs/MediaKitTab"; // Import the new MediaKitTab
 import { Badge } from "@/components/ui/badge";
 
-// Schema for just the Media Kit URL part
-const mediaKitUrlSchema = z.object({
-  media_kit_url: z.string().url("Please enter a valid URL for your media kit.").optional().or(z.literal("")).nullable(),
-});
-type MediaKitUrlFormData = z.infer<typeof mediaKitUrlSchema>;
+// Schema for just the Media Kit URL part - THIS CAN BE REMOVED if MediaKitTab handles all media kit aspects
+// const mediaKitUrlSchema = z.object({
+//   media_kit_url: z.string().url("Please enter a valid URL for your media kit.").optional().or(z.literal("")).nullable(),
+// });
+// type MediaKitUrlFormData = z.infer<typeof mediaKitUrlSchema>;
 
 interface ClientCampaignForSetup {
   campaign_id: string;
@@ -55,7 +56,8 @@ export default function ProfileSetup() {
     queryKey: ["clientCampaignsForProfileSetupPage", user?.person_id],
     queryFn: async () => {
       if (!user?.person_id) return [];
-      const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
+      // Clients automatically see only their own campaigns
+      const response = await apiRequest("GET", "/campaigns/");
       if (!response.ok) throw new Error("Failed to fetch campaigns");
       return response.json();
     },
@@ -64,15 +66,15 @@ export default function ProfileSetup() {
   
   const selectedCampaignData = campaigns.find(c => c.campaign_id === selectedCampaignId);
 
-  // Form for Media Kit URL
-  const mediaKitUrlForm = useForm<MediaKitUrlFormData>({
-    resolver: zodResolver(mediaKitUrlSchema),
-    defaultValues: { media_kit_url: "" },
-  });
+  // Form for Media Kit URL - THIS CAN BE REMOVED if MediaKitTab handles it
+  // const mediaKitUrlForm = useForm<MediaKitUrlFormData>({
+  //   resolver: zodResolver(mediaKitUrlSchema),
+  //   defaultValues: { media_kit_url: "" },
+  // });
 
   useEffect(() => {
     if (selectedCampaignData) {
-      mediaKitUrlForm.reset({ media_kit_url: selectedCampaignData.media_kit_url || "" });
+      // mediaKitUrlForm.reset({ media_kit_url: selectedCampaignData.media_kit_url || "" }); // REMOVE
       // If campaign from URL is valid and exists in fetched campaigns, keep it.
       // Otherwise, if no valid campaign is selected, and campaigns list is available, select the first one.
       if (!campaigns.find(c => c.campaign_id === selectedCampaignId) && campaigns.length > 0) {
@@ -84,33 +86,11 @@ export default function ProfileSetup() {
     } else if (!selectedCampaignId && campaigns.length === 0 && !isLoadingCampaigns) {
         // No campaigns, do nothing or show a message
     }
-  }, [selectedCampaignData, mediaKitUrlForm, campaigns, selectedCampaignId, isLoadingCampaigns, initialCampaignIdFromUrl]);
+  }, [selectedCampaignData, /* mediaKitUrlForm, */ campaigns, selectedCampaignId, isLoadingCampaigns, initialCampaignIdFromUrl]);
 
 
-  const updateMediaKitUrlMutation = useMutation({
-    mutationFn: async (data: MediaKitUrlFormData) => {
-      if (!selectedCampaignId) throw new Error("No campaign selected.");
-      const currentCampaign = campaigns.find(c => c.campaign_id === selectedCampaignId);
-      const payload = { 
-        media_kit_url: data.media_kit_url || null,
-        // Preserve other fields that might be on the update schema but not part of this form
-        // campaign_keywords and embedding_status should be updated by the backend process, not directly by client here.
-      };
-      return apiRequest("PUT", `/campaigns/${selectedCampaignId}`, payload);
-    },
-    onSuccess: async (response) => {
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Failed to update media kit URL." }));
-        throw new Error(errorData.detail);
-      }
-      tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage", user?.person_id] });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] }); // If CampaignDetail uses this
-      toast({ title: "Success", description: "Media kit URL updated. Your profile will be re-processed if necessary." });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update media kit URL.", variant: "destructive" });
-    },
-  });
+  // updateMediaKitUrlMutation - THIS CAN BE REMOVED if MediaKitTab handles all media kit updates
+  // const updateMediaKitUrlMutation = useMutation({ ... });
 
   const handleCampaignChange = (campaignId: string) => {
     const newId = campaignId === "none" ? null : campaignId;
@@ -149,15 +129,18 @@ export default function ProfileSetup() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <FormItem className="mb-6">
-            <FormLabel>Select Campaign to Setup/Update</FormLabel>
+          {/* Campaign Selection - Rewritten to avoid Form context issues */}
+          <div className="mb-6 space-y-1.5">
+            <label htmlFor="campaign-select" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Select Campaign to Setup/Update
+            </label>
             <Select 
                 onValueChange={handleCampaignChange}
                 value={selectedCampaignId || ""}
             >
-              <FormControl><SelectTrigger disabled={isLoadingCampaigns || campaigns.length === 0}>
+              <SelectTrigger id="campaign-select" disabled={isLoadingCampaigns || campaigns.length === 0}>
                 <SelectValue placeholder="Select a campaign..." />
-              </SelectTrigger></FormControl>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none" disabled>Select a campaign...</SelectItem>
                 {campaigns.map(campaign => (
@@ -169,8 +152,9 @@ export default function ProfileSetup() {
                 {campaigns.length === 0 && <div className="p-2 text-sm text-gray-500">No campaigns found. Please ask your account manager to create one.</div>}
               </SelectContent>
             </Select>
-            {!selectedCampaignId && campaigns.length > 0 && <FormDescription className="text-red-500 pt-1">Please select a campaign to proceed.</FormDescription>}
-          </FormItem>
+            {!selectedCampaignId && campaigns.length > 0 && 
+              <p className="text-sm text-muted-foreground text-red-500 pt-1">Please select a campaign to proceed.</p>}
+          </div>
 
           {selectedCampaignId && selectedCampaignData ? (
             <>
@@ -221,65 +205,37 @@ export default function ProfileSetup() {
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                 <TabsTrigger value="questionnaire"><ClipboardList className="mr-2 h-4 w-4"/>Questionnaire</TabsTrigger>
-                <TabsTrigger value="mediaKitUrl"><BookOpen className="mr-2 h-4 w-4"/>Media Kit Link</TabsTrigger>
+                <TabsTrigger value="mediaKit"><BookOpen className="mr-2 h-4 w-4"/>Media Kit</TabsTrigger> {/* Changed value and label */}
                 <TabsTrigger value="aiBioAngles" disabled={!selectedCampaignData?.questionnaire_responses && !selectedCampaignData?.mock_interview_trancript}>
                     <Lightbulb className="mr-2 h-4 w-4"/>AI Bio & Angles
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="questionnaire" className="mt-6">
-                {/* Pass selectedCampaignId and selectedCampaignData to Questionnaire if it needs them */}
                 <Questionnaire 
                   campaignId={selectedCampaignId} 
-                  // initialData={selectedCampaignData.questionnaire_responses} 
                   onSuccessfulSubmit={() => {
-                    toast({ title: "Questionnaire Submitted!", description: "We are now processing your information to enhance matching and content generation. This may take a few moments." }); // Updated Feedback
-                    refetchCampaigns(); // Refetch campaign data to show updated keywords/status
+                    toast({ title: "Questionnaire Submitted!", description: "We are now processing your information to enhance matching and content generation. This may take a few moments." });
+                    refetchCampaigns(); 
                     tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
+                    tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", selectedCampaignId, "/media-kit"] }); // Invalidate media kit data too
                   }}
                 />
               </TabsContent>
 
-              <TabsContent value="mediaKitUrl" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Media Kit Link</CardTitle>
-                    <CardDescription>Provide a link to your existing media kit (e.g., Google Drive, Dropbox, personal website page).</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Form {...mediaKitUrlForm}>
-                      <form onSubmit={mediaKitUrlForm.handleSubmit(data => updateMediaKitUrlMutation.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={mediaKitUrlForm.control}
-                          name="media_kit_url"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Your Media Kit URL</FormLabel>
-                              <FormControl>
-                                <Input placeholder="https://example.com/my-media-kit" {...field} value={field.value || ""} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" disabled={updateMediaKitUrlMutation.isPending} className="bg-primary text-primary-foreground">
-                          {updateMediaKitUrlMutation.isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4"/>Save Media Kit Link</>}
-                        </Button>
-                      </form>
-                    </Form>
-                  </CardContent>
-                </Card>
+              <TabsContent value="mediaKit" className="mt-6"> {/* Changed value */}
+                <MediaKitTab campaignId={selectedCampaignId} />
               </TabsContent>
               
               <TabsContent value="aiBioAngles" className="mt-6">
                 {selectedCampaignData?.questionnaire_responses || selectedCampaignData?.mock_interview_trancript ? (
-                    // AnglesGenerator needs to be adapted to take selectedCampaignId or be aware of it
                     <AnglesGenerator 
                       campaignId={selectedCampaignId} 
                       onSuccessfulGeneration={() => {
-                        toast({ title: "Bio & Angles Generated!", description: "We are now processing this new content to further enhance matching."}); // Updated Feedback
-                        refetchCampaigns(); // Refetch campaign data
+                        toast({ title: "Bio & Angles Generated!", description: "We are now processing this new content to further enhance matching."}); 
+                        refetchCampaigns(); 
                         tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
+                        tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", selectedCampaignId, "/media-kit"] }); // Invalidate media kit data too
                       }}
                     />
                 ) : (

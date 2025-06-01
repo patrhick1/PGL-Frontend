@@ -33,6 +33,9 @@ import CampaignDetail from "@/pages/CampaignDetail";
 
 // Auth
 import SignupPage from "@/pages/Signup";
+import LeadMagnetQuestionnaire from "@/pages/LeadMagnetQuestionnaire"; // Added for Lead Magnet
+import PublicMediaKitPage from "@/pages/PublicMediaKitPage"; // Added for public media kit viewing
+import ResetPasswordPage from "@/pages/ResetPassword"; // Added for password reset
 
 
 function Router() {
@@ -55,6 +58,9 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/login" component={Landing} />
           <Route path="/signup" component={SignupPage} />
+          <Route path="/reset-password" component={ResetPasswordPage} /> {/* Added reset password route */}
+          <Route path="/lead-magnet/questionnaire" component={LeadMagnetQuestionnaire} /> {/* Added public route */}
+          <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Added public media kit route */}
           {/* Redirect any other path to login if not authenticated */}
           <Route>
             <Redirect to="/login" replace />

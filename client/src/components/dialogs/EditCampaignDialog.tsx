@@ -90,7 +90,8 @@ export default function EditCampaignDialog({ campaign, people, open, onOpenChang
   const editCampaignMutation = useMutation({
     mutationFn: (data: CampaignUpdatePayload) => {
       if (!campaign) throw new Error("No campaign selected for editing.");
-      return apiRequest("PUT", `/campaigns/${campaign.campaign_id}`, data);
+      // Use client-specific endpoint for campaign updates
+      return apiRequest("PATCH", `/campaigns/me/${campaign.campaign_id}`, data);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Campaign updated successfully." });

@@ -35,8 +35,8 @@ export default function ClientCampaigns() {
         console.warn("ClientCampaigns: No person_id available for fetching campaigns.");
         return [];
       }
-      // The backend endpoint /campaigns/ should filter by person_id if provided
-      const response = await apiRequest("GET", `/campaigns/?person_id=${user.person_id}`);
+      // Clients automatically see only their own campaigns, no need for person_id parameter
+      const response = await apiRequest("GET", "/campaigns/");
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Failed to fetch campaigns." }));
         throw new Error(errorData.detail || "Failed to fetch campaigns");
@@ -121,7 +121,7 @@ export default function ClientCampaigns() {
               If you've recently signed up, your account manager will be in touch to set up your first campaign.
             </p>
             <p className="text-gray-500 mt-2">
-                Need help? <a href="/contact-support" className="text-primary underline">Contact Support</a>.
+                Need help? <a href="mailto:paschal@3rdbrain.co" className="text-primary underline">Contact Support</a>.
             </p>
           </CardContent>
         </Card>

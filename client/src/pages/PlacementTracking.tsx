@@ -390,15 +390,10 @@ export default function PlacementTracking() {
     queryKey: campaignsQueryKey,
     queryFn: async ({ queryKey }) => {
       const [, personId, role] = queryKey as [string, number | undefined, string | undefined];
-      if (role === 'client' && !personId) return []; // Client needs personId
       
-      let url = "/campaigns/";
-      if (role === 'client' && personId) {
-        url += `?person_id=${personId}`;
-      }
-      // Admins/staff see all campaigns by default if no personId is specified by them
-      
-      const response = await apiRequest("GET", url);
+      // For clients, they automatically see only their own campaigns
+      // For staff/admin, they see all campaigns
+      const response = await apiRequest("GET", "/campaigns/");
       if (!response.ok) throw new Error("Failed to fetch campaigns for filter");
       return response.json();
     },

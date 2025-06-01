@@ -48,6 +48,7 @@ export default function CampaignManagement() {
   const { data: campaignsData = [], isLoading: isLoadingCampaigns, error } = useQuery<CampaignSummaryForManagement[]>({
     queryKey: ["allCampaignsForManagement"],
     queryFn: async () => {
+      // Staff/Admin users see all campaigns through this endpoint
       const response = await apiRequest("GET", "/campaigns/"); 
       if (!response.ok) throw new Error("Failed to fetch campaigns");
       return response.json();

@@ -16,11 +16,13 @@ import {
   ArrowRight, // Added ArrowRight icon
 } from "lucide-react";
 import NotFound from "./not-found"; // Assuming you have a 404 component
+import { Link as RouterLink } from "wouter"; // Added for CTA button
 
 // Interface for the data expected from GET /public/media-kit/{slug}
 interface PublicMediaKitData {
   campaign_id: string;
   person_id: number;
+  is_prospect_kit?: boolean;
   title?: string | null;
   slug?: string | null;
   is_public?: boolean | null;
@@ -253,7 +255,24 @@ export default function PublicMediaKitPage() {
           </div>
         </div>
 
-        <footer className="text-center py-6 border-t border-gray-200 mt-8">
+        {/* --- CTA for Prospect Kits --- */}
+        {mediaKit.person_id && mediaKit.campaign_id && (
+          <section className="px-6 md:px-10 py-8 bg-gradient-to-r from-primary to-blue-600 text-white text-center">
+            <Sparkles className="h-10 w-10 mx-auto mb-4 text-yellow-300" />
+            <h2 className="text-2xl font-bold mb-3">Unlock Your Full Potential!</h2>
+            <p className="mb-6 max-w-2xl mx-auto text-base">
+              This is a preview of your Media Kit! Sign up now to save your progress, unlock full editing, add GDoc content, get social stats, and supercharge your podcast outreach.
+            </p>
+            <RouterLink href={`/signup?prospect_person_id=${mediaKit.person_id}&prospect_campaign_id=${mediaKit.campaign_id}`}>
+              <Button size="lg" variant="secondary" className="bg-yellow-400 hover:bg-yellow-500 text-slate-800 font-semibold text-lg px-8 py-3 shadow-lg transition-transform hover:scale-105">
+                Sign Up & Activate Full Features <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </RouterLink>
+          </section>
+        )}
+
+        <footer className="text-center py-6 border-t border-gray-200 mt-0">
+          {/* mt-0 because the CTA section above it will provide spacing */}
           <p className="text-xs text-gray-500">Media Kit powered by PGL System</p>
           {mediaKit.client_website && (
             <p className="text-xs text-gray-500 mt-1">
