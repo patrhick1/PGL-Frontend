@@ -12,13 +12,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Users, Plus, Edit, Trash2, KeyRound, Search, Briefcase, Settings as SettingsIcon, Eye, EyeOff, CheckCircle, LinkIcon, RefreshCw
+  Users, Plus, Edit, Trash2, KeyRound, Search, Briefcase, Settings as SettingsIcon, Eye, EyeOff, CheckCircle, RefreshCw
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CreateCampaignDialog, { PersonForClientSelection as PersonForCampaignDialogs } from "@/components/dialogs/CreateCampaignDialog";
 import EditCampaignDialog from "@/components/dialogs/EditCampaignDialog";
 
@@ -486,13 +485,73 @@ function CampaignsTable({
 }
 
 // --- Task Status Interfaces (based on your plan) ---
-interface TaskStatus {
-  task_name: string;
-  last_run_start_time?: string | null;
-  last_run_end_time?: string | null;
-  last_run_status?: "completed" | "failed" | "running" | "never_run" | string; // string for flexibility
-  last_run_details?: string | null;
-  next_scheduled_run?: string | null;
+interface RunningTask {
+  task_id: string;
+  action: string;
+  status: string;
+  created_at: string;
+  // Runtime will be calculated on the fly
+}
+
+function RunningTaskRow({ task }: { task: RunningTask }) {
+  const [runtime, setRuntime] = useState("0s");
+
+  useEffect(() => {
+    const calculateRuntime = () => {
+      const startTime = new Date(task.created_at).getTime();
+      const now = new Date().getTime();
+      const duration = now - startTime;
+
+      if (duration < 0) {
+        setRuntime("0s");
+        return;
+      }
+      
+      const hours = Math.floor(duration / (1000 * 60 * 60));
+      const minutes = Math.floor((duration / (1000 * 60)) % 60);
+      const seconds = Math.floor((duration / 1000) % 60);
+
+      const parts = [];
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0) parts.push(`${minutes}m`);
+      parts.push(`${seconds}s`);
+      
+      setRuntime(parts.join(' '));
+    };
+
+    calculateRuntime(); // Initial run
+    const intervalId = setInterval(calculateRuntime, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [task.created_at]);
+
+  return (
+    <TableRow>
+      <TableCell className="font-mono text-xs" title={task.task_id}>
+        {task.task_id.substring(0, 8)}...
+      </TableCell>
+      <TableCell className="capitalize">{task.action.replace(/_/g, ' ')}</TableCell>
+      <TableCell>
+        <Badge
+          variant={
+            task.status === 'completed' ? 'default' :
+            task.status === 'failed' ? 'destructive' :
+            task.status === 'pending' ? 'outline' :
+            'secondary'
+          }
+          className={`capitalize ${
+            task.status === 'completed' ? 'bg-green-100 text-green-700' : ''
+          } ${
+            task.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''
+          }`}
+        >
+          {task.status}
+        </Badge>
+      </TableCell>
+      <TableCell className="font-mono text-sm">{runtime}</TableCell>
+      <TableCell>{new Date(task.created_at).toLocaleString()}</TableCell>
+    </TableRow>
+  );
 }
 
 // --- Main Admin Panel Component ---
@@ -513,7 +572,7 @@ export default function AdminPanel() {
   const [isEditCampaignDialogOpen, setIsEditCampaignDialogOpen] = useState(false);
 
   // State for running tasks
-  const [runningTasks, setRunningTasks] = useState<Record<string, boolean>>({});
+  const [runningUiTasks, setRunningUiTasks] = useState<Record<string, boolean>>({});
 
   const { data: people = [], isLoading: isLoadingPeople, error: peopleError } = useQuery<Person[]>({
     queryKey: ["/people/"], retry: 1,
@@ -543,31 +602,15 @@ export default function AdminPanel() {
     );
   }, [campaignsWithClientNames, searchTerm]);
 
-  // --- Queries for Task Statuses ---
-  const { data: episodeSyncStatus, isLoading: isLoadingEpisodeSyncStatus } = useQuery<TaskStatus>({
-    queryKey: ["/tasks/status/fetch_podcast_episodes"],
-    queryFn: async () => { 
-      const response = await apiRequest("GET", "/tasks/status/fetch_podcast_episodes");
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Failed to fetch episode sync status" }));
-        throw new Error(errorData.detail || "Failed to fetch episode sync status");
-      }
-      return response.json();
-    },
-    retry: 1,
-  });
-
-  const { data: transcriptionTaskStatus, isLoading: isLoadingTranscriptionTaskStatus } = useQuery<TaskStatus>({
-    queryKey: ["/tasks/status/transcribe_podcast"], // Or transcribe_podcast_episodes if that's the backend task name
-    queryFn: async () => { 
-      const response = await apiRequest("GET", "/tasks/status/transcribe_podcast");
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Failed to fetch transcription status" }));
-        throw new Error(errorData.detail || "Failed to fetch transcription status");
-      }
-      return response.json();
-    },
-    retry: 1,
+  // --- Query for live running tasks ---
+  const { data: runningTasksList, isLoading: isLoadingRunningTasks, refetch: refetchRunningTasks } = useQuery<RunningTask[]>({
+      queryKey: ['/tasks/'],
+      queryFn: async () => {
+          const res = await apiRequest('GET', '/tasks/');
+          if (!res.ok) throw new Error('Failed to fetch running tasks');
+          return res.json();
+      },
+      refetchOnWindowFocus: false,
   });
 
   // --- Task Management Logic --- START
@@ -585,22 +628,22 @@ export default function AdminPanel() {
   });
 
   const handleTriggerTask = (taskName: string) => {
-    setRunningTasks(prev => ({ ...prev, [taskName]: true }));
+    setRunningUiTasks(prev => ({ ...prev, [taskName]: true }));
     triggerTaskMutation.mutate(taskName, {
       onSuccess: (data) => {
         toast({ title: "Task Success", description: data.message });
-        setRunningTasks(prev => ({ ...prev, [taskName]: false }));
-        // Potentially invalidate queries related to system status or the task's output here
-        // e.g., tanstackQueryClient.invalidateQueries({ queryKey: ["systemStatus"] });
+        setRunningUiTasks(prev => ({ ...prev, [taskName]: false }));
+        // After a task is triggered, refresh the list of running tasks
+        refetchRunningTasks();
       },
       onError: (error: Error) => {
         toast({ title: "Task Failed", description: `Error running task '${taskName}': ${error.message}`, variant: "destructive" });
-        setRunningTasks(prev => ({ ...prev, [taskName]: false }));
+        setRunningUiTasks(prev => ({ ...prev, [taskName]: false }));
       },
     });
   };
 
-  const isTaskRunning = (taskName: string): boolean => !!runningTasks[taskName];
+  const isTaskRunning = (taskName: string): boolean => !!runningUiTasks[taskName];
   // --- Task Management Logic --- END
 
   const deletePersonMutation = useMutation({
@@ -643,11 +686,13 @@ export default function AdminPanel() {
 
 
   const filteredPeople = people.filter((person: Person) =>
-    (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    person.person_id.toString().includes(searchTerm)
+    person.role?.toLowerCase() !== 'host' && (
+      (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      person.person_id.toString().includes(searchTerm)
+    )
   );
   // Client-side filtering for campaigns is now implemented with filteredCampaigns
 
@@ -657,14 +702,6 @@ export default function AdminPanel() {
   };
 
   const handleTriggerCampaignContentProcessing = (campaignId: string) => {
-    // Construct the specific task name or directly use the new API structure
-    // New API: POST /tasks/run/process_campaign_content?campaign_id={campaignId}
-    // Using the generic task handler by constructing a specific task name is one way, 
-    // but since this task structure is different, we might need a dedicated mutation or adapt handleTriggerTask.
-    // For now, let's adapt handleTriggerTask to allow passing query params as part of the task name for simplicity if it can handle it
-    // OR create a new mutation specifically for this.
-
-    // Simpler: Create a new mutation for this specific task structure
     processCampaignContentMutation.mutate(campaignId);
   };
 
@@ -834,40 +871,39 @@ export default function AdminPanel() {
       )}
       
       <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center"><SettingsIcon className="mr-2 h-5 w-5"/>System Task Status</CardTitle>
-            <CardDescription>Overview of automated background task statuses.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>Live Task Monitor</CardTitle>
+                <CardDescription>A list of currently running or recently completed background tasks.</CardDescription>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => refetchRunningTasks()} disabled={isLoadingRunningTasks}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingRunningTasks ? 'animate-spin' : ''}`} />
+                Refresh
+            </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <h4 className="font-medium">Episode Sync (fetch_podcast_episodes):</h4>
-            {isLoadingEpisodeSyncStatus ? <Skeleton className="h-5 w-3/4 mt-1" /> : (
-              episodeSyncStatus ? (
-                <div className="text-sm text-gray-600 space-y-0.5 mt-1">
-                  <p>Last Run: {episodeSyncStatus.last_run_end_time ? new Date(episodeSyncStatus.last_run_end_time).toLocaleString() : 'N/A'}</p>
-                  <p>Status: <Badge variant={episodeSyncStatus.last_run_status === 'completed' ? 'default' : episodeSyncStatus.last_run_status === 'running' ? 'outline' : 'destructive'} className={episodeSyncStatus.last_run_status === 'completed' ? 'bg-green-100 text-green-700' : episodeSyncStatus.last_run_status === 'running' ? 'bg-blue-100 text-blue-700' : '' }>{episodeSyncStatus.last_run_status || 'N/A'}</Badge></p>
-                  {episodeSyncStatus.last_run_details && <p>Details: {episodeSyncStatus.last_run_details}</p>}
-                  {episodeSyncStatus.next_scheduled_run && <p>Next Run: {new Date(episodeSyncStatus.next_scheduled_run).toLocaleString()}</p>}
-                </div>
-              ) : <p className="text-sm text-gray-500 mt-1">Could not load status.</p>
-            )}
-          </div>
-          <div className="pt-3 border-t">
-            <h4 className="font-medium">Transcription & Analysis (transcribe_podcast):</h4>
-            {isLoadingTranscriptionTaskStatus ? <Skeleton className="h-5 w-3/4 mt-1" /> : (
-              transcriptionTaskStatus ? (
-                <div className="text-sm text-gray-600 space-y-0.5 mt-1">
-                  <p>Last Run: {transcriptionTaskStatus.last_run_end_time ? new Date(transcriptionTaskStatus.last_run_end_time).toLocaleString() : (transcriptionTaskStatus.last_run_start_time ? `${new Date(transcriptionTaskStatus.last_run_start_time).toLocaleString()} (Still Running)` : 'N/A')}</p>
-                  <p>Status: <Badge variant={transcriptionTaskStatus.last_run_status === 'completed' ? 'default' : transcriptionTaskStatus.last_run_status === 'running' ? 'outline' : 'destructive'} className={transcriptionTaskStatus.last_run_status === 'completed' ? 'bg-green-100 text-green-700' : transcriptionTaskStatus.last_run_status === 'running' ? 'bg-blue-100 text-blue-700' : '' }>{transcriptionTaskStatus.last_run_status || 'N/A'}</Badge></p>
-                  {transcriptionTaskStatus.last_run_details && <p>Details: {transcriptionTaskStatus.last_run_details}</p>}
-                  {transcriptionTaskStatus.next_scheduled_run && <p>Next Run: {new Date(transcriptionTaskStatus.next_scheduled_run).toLocaleString()}</p>}
-                </div>
-              ) : <p className="text-sm text-gray-500 mt-1">Could not load status.</p>
-            )}
-          </div>
-          {/* Add more task statuses as needed here */}
+        <CardContent>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Task ID</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Runtime</TableHead>
+                        <TableHead>Created At</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoadingRunningTasks && <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>}
+                    {!isLoadingRunningTasks && runningTasksList && runningTasksList.length === 0 && (
+                        <TableRow><TableCell colSpan={5} className="text-center">No active tasks.</TableCell></TableRow>
+                    )}
+                    {runningTasksList?.map(task => (
+                        <RunningTaskRow key={task.task_id} task={task} />
+                    ))}
+                </TableBody>
+            </Table>
         </CardContent>
-      </Card>
+    </Card>
 
       <Card>
         <CardHeader>
@@ -876,35 +912,145 @@ export default function AdminPanel() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h4 className="font-medium mb-1">Podcast Episode Ingestion</h4>
+            <h4 className="font-medium mb-1">Episode Sync</h4>
             <p className="text-sm text-gray-600 mb-2">
-              Manually trigger a global sync for all podcasts.
-              For specific podcast sync, go to its Media Detail page.
+              Trigger global episode sync for all podcasts. Fetches latest episodes from feeds.
             </p>
             <Button
               size="sm"
               onClick={() => handleTriggerTask('fetch_podcast_episodes')}
-              disabled={isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'fetch_podcast_episodes')}
+              disabled={isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'fetch_podcast_episodes')}
             >
-              { (isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'fetch_podcast_episodes')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Syncing All...</> : "Sync All Podcast Episodes"}
+              { (isTaskRunning('fetch_podcast_episodes') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'fetch_podcast_episodes')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Syncing...</> : "Fetch Podcast Episodes"}
             </Button>
           </div>
-          {/* --- Transcription & Analysis Task --- START */}
+
           <div className="mt-4 pt-4 border-t">
-            <h4 className="font-medium mb-1">Episode Transcription & Analysis</h4>
+            <h4 className="font-medium mb-1">Episode Transcription</h4>
             <p className="text-sm text-gray-600 mb-2">
-              Manually trigger transcription & analysis for episodes needing it.
-              For specific podcast transcription, go to its Media Detail page.
+              Trigger transcription for episodes that need processing. Generates transcripts and summaries.
             </p>
             <Button 
               size="sm"
               onClick={() => handleTriggerTask('transcribe_podcast')}
-              disabled={isTaskRunning('transcribe_podcast') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'transcribe_podcast')}
+              disabled={isTaskRunning('transcribe_podcast') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'transcribe_podcast')}
             >
-              { (isTaskRunning('transcribe_podcast') || (triggerTaskMutation.status === 'pending' && triggerTaskMutation.variables === 'transcribe_podcast')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : "Process Transcriptions & Analysis"}
+              { (isTaskRunning('transcribe_podcast') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'transcribe_podcast')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</> : "Transcribe Podcast"}
             </Button>
           </div>
-          {/* --- Transcription & Analysis Task --- END */}
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Enrichment Pipeline</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Run the enrichment pipeline to gather additional metadata and statistics for podcasts.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('enrichment_pipeline')}
+              disabled={isTaskRunning('enrichment_pipeline') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'enrichment_pipeline')}
+            >
+              { (isTaskRunning('enrichment_pipeline') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'enrichment_pipeline')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Enriching...</> : "Enrichment Pipeline"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Vetting Pipeline</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Run the AI vetting pipeline to analyze and score podcast matches against campaigns.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('run_vetting_pipeline')}
+              disabled={isTaskRunning('run_vetting_pipeline') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'run_vetting_pipeline')}
+            >
+              { (isTaskRunning('run_vetting_pipeline') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'run_vetting_pipeline')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Vetting...</> : "Run Vetting Pipeline"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Qualitative Match Assessment</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Perform qualitative assessment of podcast matches using AI analysis.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('qualitative_match_assessment')}
+              disabled={isTaskRunning('qualitative_match_assessment') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'qualitative_match_assessment')}
+            >
+              { (isTaskRunning('qualitative_match_assessment') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'qualitative_match_assessment')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Assessing...</> : "Qualitative Match Assessment"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Bio & Angles Generation</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Generate client bios and pitch angles for campaigns using AI analysis.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('generate_bio_angles')}
+              disabled={isTaskRunning('generate_bio_angles') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'generate_bio_angles')}
+            >
+              { (isTaskRunning('generate_bio_angles') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'generate_bio_angles')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Generating...</> : "Generate Bio Angles"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Pitch Writer</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Generate customized pitch emails for approved podcast matches.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('pitch_writer')}
+              disabled={isTaskRunning('pitch_writer') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'pitch_writer')}
+            >
+              { (isTaskRunning('pitch_writer') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'pitch_writer')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Writing...</> : "Pitch Writer"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Score Potential Matches</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Score potential matches between campaigns and podcasts using AI analysis.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('score_potential_matches')}
+              disabled={isTaskRunning('score_potential_matches') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'score_potential_matches')}
+            >
+              { (isTaskRunning('score_potential_matches') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'score_potential_matches')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Scoring...</> : "Score Potential Matches"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Create Matches for Enriched Media</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Create final matches for enriched media that have passed all quality checks.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('create_matches_for_enriched_media')}
+              disabled={isTaskRunning('create_matches_for_enriched_media') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'create_matches_for_enriched_media')}
+            >
+              { (isTaskRunning('create_matches_for_enriched_media') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'create_matches_for_enriched_media')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Creating...</> : "Create Matches for Enriched Media"}
+            </Button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-1">Send Pitch</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Send approved pitches to podcast hosts. Use with caution.
+            </p>
+            <Button 
+              size="sm"
+              onClick={() => handleTriggerTask('send_pitch')}
+              disabled={isTaskRunning('send_pitch') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'send_pitch')}
+              variant="destructive"
+            >
+              { (isTaskRunning('send_pitch') || (triggerTaskMutation.isPending && triggerTaskMutation.variables === 'send_pitch')) ? <><SettingsIcon className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : "Send Pitch"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

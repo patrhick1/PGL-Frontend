@@ -111,49 +111,51 @@ export default function EditCampaignDialog({ campaign, people, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Edit Campaign: {campaign.campaign_name}</DialogTitle>
           <DialogDescription>Edit the details for this campaign.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
-            <FormField control={form.control} name="person_id" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Client (Person)</FormLabel>
-                <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    {people.filter(p => p.role === 'client').map(p => (
-                      <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_name" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_type" render={({ field }) => (
-              <FormItem><FormLabel>Campaign Type</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
-              <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
-              <FormItem><FormLabel>Mock Interview Transcript/Link</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="media_kit_url" render={({ field }) => (
-              <FormItem><FormLabel>Media Kit URL</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="goal_note" render={({ field }) => (
-              <FormItem><FormLabel>Goal/Focus for Campaign</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
-              <FormItem><FormLabel>Instantly Campaign ID</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <DialogFooter>
+          <form onSubmit={form.handleSubmit(onEditSubmit)} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+              <FormField control={form.control} name="person_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Client (Person)</FormLabel>
+                  <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {people.filter(p => p.role === 'client').map(p => (
+                        <SelectItem key={p.person_id} value={p.person_id.toString()}>{p.full_name} ({p.email})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="campaign_name" render={({ field }) => (
+                <FormItem><FormLabel>Campaign Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="campaign_type" render={({ field }) => (
+                <FormItem><FormLabel>Campaign Type</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="campaign_keywords_str" render={({ field }) => (
+                <FormItem><FormLabel>Keywords (comma-separated)</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="mock_interview_trancript" render={({ field }) => (
+                <FormItem><FormLabel>Mock Interview Transcript/Link</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="media_kit_url" render={({ field }) => (
+                <FormItem><FormLabel>Media Kit URL</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="goal_note" render={({ field }) => (
+                <FormItem><FormLabel>Goal/Focus for Campaign</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="instantly_campaign_id" render={({ field }) => (
+                <FormItem><FormLabel>Instantly Campaign ID</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </div>
+            <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button type="submit" disabled={editCampaignMutation.isPending}>
                 {editCampaignMutation.isPending ? "Saving..." : "Save Changes"}

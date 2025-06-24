@@ -17,7 +17,7 @@ interface AuthUser {
   instagram_profile_url?: string | null;
   tiktok_profile_url?: string | null;
   dashboard_username?: string | null;
-  profileImageUrl?: string | null; // Was already commented, making it active
+  profile_image_url?: string | null; // Match backend response field name
   notification_settings?: Record<string, any> | null; // Assuming object, adjust if different
   privacy_settings?: Record<string, any> | null;    // Assuming object, adjust if different
 }
@@ -30,6 +30,9 @@ export function useAuth() {
     staleTime: 1000 * 60 * 5, 
     refetchOnWindowFocus: true,
   });
+
+  // Debug logging
+  console.log('🔐 useAuth data:', { user, isLoading, error, isSuccess });
 
   return {
     user,

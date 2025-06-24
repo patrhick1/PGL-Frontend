@@ -18,7 +18,8 @@ import {
   CalendarPlus,
   PlayCircle, // For RecentBookingCard
   Users,
-  ExternalLink // Added ExternalLink
+  ExternalLink, // Added ExternalLink
+  Settings // Added Settings icon
 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } // Assuming useAuth provides user role and person_id
@@ -224,7 +225,7 @@ function PodcastRecommendationCard({ podcast }: { podcast: RecommendedPodcastIte
             {podcast.audience_size ? `${(podcast.audience_size / 1000).toFixed(0)}K listeners` : 'Audience N/A'}
           </span>
           <span className={`px-2 py-0.5 font-medium rounded-full ${matchScore.class}`}>
-            {matchScore.label} {podcast.quality_score ? `(${Math.round(podcast.quality_score)})` : ''}
+            PGL Match Score: {podcast.quality_score ? `${Math.round(podcast.quality_score)}/100` : 'N/A'}
           </span>
         </div>
          {podcast.website && (
@@ -337,9 +338,9 @@ export default function Dashboard() {
             <CardContent className="p-4 md:p-6">
               <div className="space-y-3">
                 <QuickActionButton title="Discover New Podcasts" icon={Search} href="/discover" colorClass="hover:bg-primary/5" />
-                <QuickActionButton title="Generate Pitch Angle" icon={Lightbulb} href="/angles-generator" colorClass="hover:bg-yellow-500/5" />
-                <QuickActionButton title="Update Media Kit" icon={FolderOpen} href="/media-kit" colorClass="hover:bg-green-500/5" />
-                <QuickActionButton title="Take Questionnaire" icon={ClipboardList} href="/questionnaire" colorClass="hover:bg-teal-500/5" />
+                <QuickActionButton title="My Profile & Content" icon={ClipboardList} href="/profile-setup" colorClass="hover:bg-yellow-500/5" />
+                <QuickActionButton title="Campaign Management" icon={FolderOpen} href="/my-campaigns" colorClass="hover:bg-green-500/5" />
+                <QuickActionButton title="View Settings" icon={Settings} href="/settings" colorClass="hover:bg-teal-500/5" />
               </div>
             </CardContent>
           </Card>

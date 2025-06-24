@@ -10,9 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, ExternalLink, Lightbulb, Info, AlertTriangle, CheckSquare, Send, RefreshCw, ArrowRight } from "lucide-react";
+import { Search, ExternalLink, Lightbulb, Info, AlertTriangle, CheckSquare, Send, RefreshCw, ArrowRight, CheckCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import DiscoveryProgressTracker from "@/components/DiscoveryProgressTracker";
 
 // --- Interfaces (simplified based on usage in your plan) ---
 interface CampaignForDiscovery {
@@ -68,6 +69,8 @@ export default function PodcastDiscovery() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [staffDiscoveredMatches, setStaffDiscoveredMatches] = useState<StaffDiscoveredMatch[]>([]);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('desc'); // For match_score sorting
+  const [maxMatchesInput, setMaxMatchesInput] = useState<string>(""); // State for max_matches input
+  const [showProgressTracker, setShowProgressTracker] = useState(false);
 
   // --- Client-Specific State & Queries ---
   const [clientDiscoveredPodcastPreviews, setClientDiscoveredPodcastPreviews] = useState<PodcastPreview[]>([]);
@@ -100,9 +103,21 @@ export default function PodcastDiscovery() {
             can_discover_this_week: true,
         };
       }
-      const response = await apiRequest("GET", `/client/discovery-status`);
-      if (!response.ok) throw new Error("Failed to fetch discovery status");
-      return response.json();
+      // Temporarily return default values until backend endpoint is ready
+      return {
+          person_id: user?.person_id || 0,
+          plan_type: 'client', 
+          daily_discoveries_used: 0,
+          daily_discovery_allowance: Infinity,
+          weekly_discoveries_used: 0,
+          weekly_discovery_allowance: Infinity,
+          can_discover_today: true,
+          can_discover_this_week: true,
+      };
+      // TODO: Re-enable when backend endpoint is ready
+      // const response = await apiRequest("GET", `/client/discovery-status`);
+      // if (!response.ok) throw new Error("Failed to fetch discovery status");
+      // return response.json();
     },
     enabled: !!user && !authLoading,
   });
@@ -110,7 +125,7 @@ export default function PodcastDiscovery() {
   // --- Client-Specific Mutations ---
   const clientDiscoverPreviewMutation = useMutation({
     mutationFn: async (campaignId: string) => {
-        const response = await apiRequest("POST", `/client/discover-preview`, { campaign_id: campaignId });
+          const response = await apiRequest("POST", `/client/client/campaigns/${campaignId}/discover-preview`, {});
         if (!response.ok) { const errorData = await response.json().catch(() => ({detail: "Failed to get discovery preview"})); throw new Error(errorData.detail);}
         return response.json();
     },
@@ -139,26 +154,38 @@ export default function PodcastDiscovery() {
 
   // --- Staff/Admin Specific Mutation for discovering matches for a campaign ---
   const staffAdminDiscoverForCampaignMutation = useMutation({
-    mutationFn: async (campaignId: string) => { 
+    mutationFn: async (params: { campaignId: string; maxMatches?: number }) => { 
+      const { campaignId, maxMatches } = params;
       if (!campaignId) {
         throw new Error("A campaign must be selected to discover matches.");
       }
-      const response = await apiRequest("POST", `/match-suggestions/campaigns/${campaignId}/discover`, {});
+      const payload: { max_matches?: number } = {};
+      if (maxMatches && maxMatches > 0) {
+        payload.max_matches = maxMatches;
+      }
+      const response = await apiRequest("POST", `/match-suggestions/campaigns/${campaignId}/discover`, payload);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Failed to discover matches for campaign." }));
         throw new Error(errorData.detail);
       }
       return response.json(); 
     },
-    onSuccess: (data: StaffDiscoveredMatch[]) => { 
-      setStaffDiscoveredMatches(data);
-      toast({ title: "Discovery Process Initiated", description: `Found and created ${data.length} initial match suggestions for the campaign. They will require further review.` });
+    onSuccess: (data: any) => {
+      toast({ 
+        title: "🚀 Discovery Pipeline Started", 
+        description: data.message || `Automated discovery initiated for campaign. Podcasts will be discovered → enriched → vetted → matched automatically.` 
+      });
+      
+      
+      // Invalidate queries that would show the results of discovery
       if (selectedCampaignId) {
         tanstackQueryClient.invalidateQueries({ queryKey: ["campaignMatchesDetail", selectedCampaignId] });
         tanstackQueryClient.invalidateQueries({ queryKey: ["matchSuggestions", selectedCampaignId] }); 
+        tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] }); 
+        // Show progress tracker
+        setShowProgressTracker(true);
       }
-      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] }); 
-      tanstackQueryClient.invalidateQueries({ queryKey: ["allMatchSuggestions"] }); 
+      setStaffDiscoveredMatches([]); 
     },
     onError: (error: any) => {
       setStaffDiscoveredMatches([]);
@@ -200,9 +227,19 @@ export default function PodcastDiscovery() {
       toast({ title: "Campaign Required", description: "Please select a client campaign to run discovery for.", variant: "destructive" });
       return;
     }
-    setStaffDiscoveredMatches([]); // Clear previous results before new fetch
-    setSortOrder('desc'); // Reset sort order
-    staffAdminDiscoverForCampaignMutation.mutate(selectedCampaignId);
+    
+    const maxMatches = parseInt(maxMatchesInput, 10);
+    const mutationParams: { campaignId: string; maxMatches?: number } = { campaignId: selectedCampaignId };
+    if (!isNaN(maxMatches) && maxMatches > 0) {
+      mutationParams.maxMatches = maxMatches;
+    } else if (maxMatchesInput !== "") { // If input is not empty but not a valid positive number
+      toast({ title: "Invalid Input", description: "Max Matches must be a positive number.", variant: "destructive" });
+      return;
+    }
+
+    setStaffDiscoveredMatches([]); 
+    setSortOrder('desc'); 
+    staffAdminDiscoverForCampaignMutation.mutate(mutationParams);
   };
 
   const sortedStaffDiscoveredMatches = [...staffDiscoveredMatches].sort((a, b) => {
@@ -211,6 +248,15 @@ export default function PodcastDiscovery() {
     const scoreB = b.match_score ?? -1;
     return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
   });
+
+  const handleDiscoveryComplete = () => {
+    setShowProgressTracker(false);
+    toast({
+      title: "🎉 Discovery Pipeline Complete!",
+      description: "New review tasks are ready in the Approvals page."
+    });
+    // Additional success actions can be added here
+  };
 
   // --- Render Logic ---
   if (authLoading || (userRoleLower === 'client' && (isLoadingClientCampaigns || isLoadingStatus))) {
@@ -300,8 +346,7 @@ export default function PodcastDiscovery() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5 text-primary" />Podcast Discovery for Campaign (Staff/Admin)</CardTitle>
               <CardDescription>
-                Select a client campaign. The system will use its keywords to find podcasts,
-                create match suggestions, and generate review tasks for the team.
+                Select a client campaign. The system will use its keywords to find podcasts and initiate the match suggestion process.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -310,6 +355,7 @@ export default function PodcastDiscovery() {
                 onValueChange={(value) => {
                   setSelectedCampaignId(value === "none" ? null : value);
                   setStaffDiscoveredMatches([]); 
+                  setMaxMatchesInput(""); // Reset max matches input when campaign changes
                 }}
                 disabled={isLoadingClientCampaigns || clientCampaigns.length === 0}
               >
@@ -327,17 +373,65 @@ export default function PodcastDiscovery() {
                  </SelectContent>
               </Select>
 
-              <Button
-                onClick={handleStaffAdminDiscover}
-                disabled={!selectedCampaignId || staffAdminDiscoverForCampaignMutation.isPending}
-                className="w-full sm:w-auto bg-primary text-primary-foreground"
-              >
-                {staffAdminDiscoverForCampaignMutation.isPending ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin"/>Discovering & Creating Suggestions...</> : <><Search className="mr-2 h-4 w-4"/>Run Discovery for Campaign</>}
-              </Button>
+              <div className="flex flex-col sm:flex-row items-end gap-3">
+                <div className="flex-grow sm:flex-grow-0 sm:w-1/3">
+                  <label htmlFor="maxMatches" className="block text-sm font-medium text-gray-700 mb-1">
+                    Max New Matches (Optional)
+                  </label>
+                  <Input
+                    id="maxMatches"
+                    type="number"
+                    placeholder="e.g., 10"
+                    value={maxMatchesInput}
+                    onChange={(e) => setMaxMatchesInput(e.target.value)}
+                    className="w-full"
+                    min="1"
+                  />
+                </div>
+                <Button
+                  onClick={handleStaffAdminDiscover}
+                  disabled={!selectedCampaignId || staffAdminDiscoverForCampaignMutation.isPending}
+                  className="w-full sm:w-auto bg-primary text-primary-foreground flex-shrink-0"
+                >
+                  {staffAdminDiscoverForCampaignMutation.isPending ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin"/>Starting Discovery...</> : <><Search className="mr-2 h-4 w-4"/>Run Discovery for Campaign</>}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Automated discovery pipeline: Podcasts will be discovered → AI analysis → quality vetting → match creation → review tasks generated.
+                Leave Max Matches blank for default behavior (~50 matches).
+              </p>
             </CardContent>
           </Card>
 
-          {staffAdminDiscoverForCampaignMutation.isSuccess && staffDiscoveredMatches.length > 0 && (
+          {/* Progress Tracker Component */}
+          {showProgressTracker && selectedCampaignId && (
+            <DiscoveryProgressTracker 
+              campaignId={selectedCampaignId}
+              isActive={showProgressTracker}
+              onComplete={handleDiscoveryComplete}
+            />
+          )}
+          
+          {/* Success Message */}
+          {staffAdminDiscoverForCampaignMutation.isSuccess && !showProgressTracker && staffDiscoveredMatches.length === 0 && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-6 text-center">
+                <div className="flex flex-col items-center space-y-2">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-green-800">Discovery Pipeline Started!</h3>
+                  <p className="text-sm text-green-600 max-w-md">
+                    The automated discovery system is now finding and analyzing podcasts for your campaign. 
+                    Review tasks will appear in the <Link href="/approvals" className="underline font-medium">Approvals page</Link> when ready.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* The section for displaying staffDiscoveredMatches (if any are loaded from another source or kept from previous logic) */}
+          {staffDiscoveredMatches.length > 0 && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -427,9 +521,6 @@ export default function PodcastDiscovery() {
                 ))}
               </CardContent>
             </Card>
-          )}
-          {staffAdminDiscoverForCampaignMutation.isSuccess && staffDiscoveredMatches.length === 0 && (
-            <Card><CardContent className="p-6 text-center text-gray-500">No new match suggestions were created for this campaign. They might already exist, or no relevant podcasts were found based on the campaign's keywords.</CardContent></Card>
           )}
         </>
       )}

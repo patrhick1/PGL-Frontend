@@ -13,8 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Image as ImageIcon, Users, BarChart2, Save, Info, Link as LinkIcon } from 'lucide-react';
+import { ExternalLink, Image as ImageIcon, Users, BarChart2, Save, Info, Link as LinkIcon, Camera } from 'lucide-react';
 import { Link as RouterLink } from 'wouter';
+import { ImageUpload } from '@/components/ImageUpload';
 
 // --- Zod Schema for Editable Media Kit Content (MediaKitEditableContentSchema) ---
 const mediaKitEditableContentSchema = z.object({
@@ -56,7 +57,7 @@ interface MediaKitData {
   summary_bio_content?: string | null;
   short_bio_content?: string | null;
   talking_points?: TalkingPoint[] | null;
-  image_urls?: { profile_image_url?: string | null; cover_image_url?: string | null; gallery_image_urls?: string[] | null } | null;
+  image_urls?: { headshot_url?: string | null; logo_url?: string | null; cover_image_url?: string | null; gallery_image_urls?: string[] | null } | null;
   social_media_stats?: SocialMediaStat[] | null;
   call_to_action_text?: string | null;
   call_to_action_url?: string | null;
@@ -139,7 +140,7 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
       // Potentially invalidate general campaign list if it shows media kit status
       tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage"] }); 
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Error Saving Media Kit", description: error.message, variant: "destructive" });
     },
   });
@@ -201,6 +202,42 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
 
       {mediaKitData && (
         <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Media Kit Images</CardTitle>
+              <CardDescription>Upload a professional headshot and a company logo for your media kit.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Client Headshot</label>
+                        <ImageUpload
+                            campaignId={campaignId!}
+                            uploadContext="media_kit_headshot"
+                            currentImageUrl={mediaKitData?.image_urls?.headshot_url}
+                            onUploadComplete={(url) => {
+                                // This will trigger a re-fetch, which will then update the image URL display
+                                tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", campaignId, "/media-kit"] });
+                            }}
+                        />
+                        <p className="text-sm text-muted-foreground">A professional, high-resolution headshot. Recommended size: 500x500px.</p>
+                    </div>
+                    <div className="space-y-2">
+                         <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Company or Brand Logo</label>
+                         <ImageUpload
+                            campaignId={campaignId!}
+                            uploadContext="media_kit_logo"
+                            currentImageUrl={mediaKitData?.image_urls?.logo_url}
+                            onUploadComplete={(url) => {
+                                tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", campaignId, "/media-kit"] });
+                            }}
+                        />
+                        <p className="text-sm text-muted-foreground">Your company's logo. A transparent PNG is recommended. Recommended size: 300x150px.</p>
+                    </div>
+                </div>
+            </CardContent>
+          </Card>
+
           <Card className="mt-6">
             <CardHeader>
               <div className="flex justify-between items-center">

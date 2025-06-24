@@ -163,21 +163,9 @@ export default function ProfileSetup() {
                 <CardTitle className="text-lg flex items-center">
                   <Info className="h-5 w-5 mr-2 text-primary" /> Campaign Profile Strength
                 </CardTitle>
-                <CardDescription>This section shows the consolidated keywords and processing status for your selected campaign, indicating its readiness for effective podcast matching.</CardDescription>
+                <CardDescription>This section shows the processing status for your selected campaign, indicating its readiness for effective podcast matching.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Consolidated Keywords:</h4>
-                  {selectedCampaignData.campaign_keywords && selectedCampaignData.campaign_keywords.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedCampaignData.campaign_keywords.map(kw => (
-                        <Badge key={kw} variant="default" className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200">{kw}</Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No keywords processed yet. Complete the questionnaire or AI Bio & Angles for this campaign.</p>
-                  )}
-                </div>
                 <div>
                   <h4 className="font-medium text-sm mb-1">Profile Enhancement Status:</h4>
                   {selectedCampaignData.embedding_status ? (
@@ -205,10 +193,10 @@ export default function ProfileSetup() {
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                 <TabsTrigger value="questionnaire"><ClipboardList className="mr-2 h-4 w-4"/>Questionnaire</TabsTrigger>
-                <TabsTrigger value="mediaKit"><BookOpen className="mr-2 h-4 w-4"/>Media Kit</TabsTrigger> {/* Changed value and label */}
                 <TabsTrigger value="aiBioAngles" disabled={!selectedCampaignData?.questionnaire_responses && !selectedCampaignData?.mock_interview_trancript}>
                     <Lightbulb className="mr-2 h-4 w-4"/>AI Bio & Angles
                 </TabsTrigger>
+                <TabsTrigger value="mediaKit"><BookOpen className="mr-2 h-4 w-4"/>Media Kit</TabsTrigger>
               </TabsList>
 
               <TabsContent value="questionnaire" className="mt-6">
@@ -221,10 +209,6 @@ export default function ProfileSetup() {
                     tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", selectedCampaignId, "/media-kit"] }); // Invalidate media kit data too
                   }}
                 />
-              </TabsContent>
-
-              <TabsContent value="mediaKit" className="mt-6"> {/* Changed value */}
-                <MediaKitTab campaignId={selectedCampaignId} />
               </TabsContent>
               
               <TabsContent value="aiBioAngles" className="mt-6">
@@ -246,6 +230,10 @@ export default function ProfileSetup() {
                         </CardContent>
                     </Card>
                 )}
+              </TabsContent>
+
+              <TabsContent value="mediaKit" className="mt-6">
+                <MediaKitTab campaignId={selectedCampaignId} />
               </TabsContent>
             </Tabs>
             </>

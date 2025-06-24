@@ -1,3 +1,4 @@
+// client/src/pages/MediaDetail.tsx
 import { useState, useEffect } from 'react';
 import { useParams } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import { ArrowLeft, RefreshCw, Edit3, Mic, BarChartBig, ExternalLink, FileText, 
 import { Link } from 'wouter';
 import { useAuth } from '@/hooks/useAuth'; // Assuming useAuth provides user role
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog"; // For transcript modal
+import { ProvenanceField } from '@/components/ProvenanceField';
 
 // --- Placeholder Interfaces (align with backend schemas when available) ---
 interface MediaDetails {
@@ -18,6 +20,8 @@ interface MediaDetails {
   name: string;
   description?: string | null;
   website?: string | null;
+  contact_email?: string | null; 
+  host_names?: string[] | null; 
   image_url?: string | null;
   rss_feed_url?: string | null;
   author?: string | null;
@@ -26,6 +30,23 @@ interface MediaDetails {
   last_fetched_at?: string | null;
   latest_episode_date?: string | null;
   // Add other fields from MediaInDB as needed
+
+  // Data Provenance
+  provenance?: {
+    [key: string]: {
+      source: string;
+      confidence: number;
+      updated_at: string;
+    }
+  };
+
+  // Quality Score
+  quality_score?: number | null;
+  quality_score_recency?: number | null;
+  quality_score_frequency?: number | null;
+  quality_score_audience?: number | null;
+  quality_score_social?: number | null;
+  quality_score_last_calculated?: string | null;
 }
 
 // Using the EpisodeInDB schema provided
@@ -122,9 +143,30 @@ export default function MediaDetail() {
   });
 
   // --- Mutations for Actions (placeholder logic) ---
+  const enrichMutation = useMutation<any, Error, number>({
+    mutationFn: async (mediaId: number) => {
+      const endpoint = `/media/${mediaId}/enrich`;
+      const response = await apiRequest("POST", endpoint);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: `Failed to start enrichment` }));
+        throw new Error(errorData.detail || `Failed to start enrichment`);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Enrichment Started", description: data.message || `Full enrichment started for ${media?.name}. Data will be updated shortly.` });
+      queryClient.invalidateQueries({ queryKey: ["/media/", mediaId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Enrichment Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const taskMutation = useMutation<any, Error, { taskName: string; mediaId?: number }>({
     mutationFn: async (params: { taskName: string; mediaId?: number }) => {
-      const endpoint = params.mediaId ? `/tasks/run/${params.taskName}?media_id=${params.mediaId}` : `/tasks/run/${params.taskName}`;
+      const endpoint = params.mediaId 
+        ? `/tasks/run/${params.taskName}?media_id=${params.mediaId}` 
+        : `/tasks/run/${params.taskName}`;
       toast({ title: "Task Triggered", description: `Starting task: ${params.taskName} for media ID: ${params.mediaId || '(global)'}...` });
       const response = await apiRequest("POST", endpoint);
       if (!response.ok) {
@@ -153,14 +195,12 @@ export default function MediaDetail() {
 
   const handleTriggerTranscription = () => {
     if (!mediaId) return;
-    // Backend: POST /tasks/run/transcribe_podcast?media_id={id}
     taskMutation.mutate({ taskName: 'transcribe_podcast', mediaId });
   };
   
   const handleTriggerEnrichment = () => {
     if (!mediaId) return;
-    // Backend: POST /tasks/run/enrichment_pipeline?media_id={id}
-    taskMutation.mutate({ taskName: 'enrichment_pipeline', mediaId });
+    enrichMutation.mutate(mediaId);
   };
 
   // --- Render Logic ---
@@ -230,30 +270,50 @@ export default function MediaDetail() {
             <div className="flex-1">
               <CardTitle className="text-2xl md:text-3xl font-bold">{media.name}</CardTitle>
               {media.author && <CardDescription className="text-lg">By {media.author}</CardDescription>}
-              {media.website && (
-                <a href={media.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline inline-flex items-center mt-1">
-                  Visit Website <ExternalLink className="h-3 w-3 ml-1" />
-                </a>
-              )}
-               {media.rss_feed_url && (
-                <a href={media.rss_feed_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline inline-flex items-center mt-1 ml-3">
-                  RSS Feed <ExternalLink className="h-3 w-3 ml-1" />
-                </a>
-              )}
             </div>
           </div>
-          {isAdminOrStaff && (
-            <div className="flex flex-col sm:flex-row md:flex-col gap-2 mt-4 md:mt-0 flex-shrink-0">
-              <Button size="sm" variant="outline" onClick={() => alert("Edit media details - TBD (modal or new page)")}>
-                <Edit3 className="h-4 w-4 mr-2" /> Edit Details
-              </Button>
-              {/* More actions can be added here */}
-            </div>
-          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {media.description && <p className="text-gray-700 whitespace-pre-wrap">{media.description}</p>}
           
+          {isAdminOrStaff && (
+            <Card className="bg-slate-50/50">
+                <CardHeader>
+                    <CardTitle className="text-lg">Podcast Data</CardTitle>
+                    <CardDescription>Key data points for this podcast. Edit fields to manually verify and lock them.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid md:grid-cols-2 gap-x-6 gap-y-4">
+                    <ProvenanceField
+                        mediaId={media.media_id}
+                        fieldName="website"
+                        label="Website"
+                        value={media.website}
+                        provenance={media.provenance?.website}
+                    />
+                    <ProvenanceField
+                        mediaId={media.media_id}
+                        fieldName="contact_email"
+                        label="Contact Email"
+                        value={media.contact_email}
+                        provenance={media.provenance?.contact_email}
+                    />
+                    <ProvenanceField
+                        mediaId={media.media_id}
+                        fieldName="host_names"
+                        label="Host Names"
+                        value={media.host_names?.join(', ')}
+                        provenance={media.provenance?.host_names}
+                    />
+                     <div>
+                        <p className="font-medium text-gray-500 mb-1">RSS Feed</p>
+                        {media.rss_feed_url ? <a href={media.rss_feed_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline inline-flex items-center break-all">
+                            {media.rss_feed_url}
+                        </a> : <p className="text-sm">N/A</p>}
+                    </div>
+                </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="font-medium text-gray-500">Language</p>
@@ -284,23 +344,60 @@ export default function MediaDetail() {
                     <CardDescription>Trigger backend processes for this podcast.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={handleTriggerEpisodeSync} disabled={taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'fetch_podcast_episodes'}>
-                        <RefreshCw className={`h-4 w-4 mr-2 ${taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'fetch_podcast_episodes' ? 'animate-spin' : ''}`} />
-                        {taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'fetch_podcast_episodes' ? 'Syncing...' : 'Sync Episodes'}
+                    <Button size="sm" onClick={handleTriggerEpisodeSync} disabled={taskMutation.isPending && taskMutation.variables?.taskName === 'fetch_podcast_episodes'}>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${taskMutation.isPending && taskMutation.variables?.taskName === 'fetch_podcast_episodes' ? 'animate-spin' : ''}`} />
+                        {taskMutation.isPending && taskMutation.variables?.taskName === 'fetch_podcast_episodes' ? 'Syncing...' : 'Sync Episodes'}
                     </Button>
-                    <Button size="sm" onClick={handleTriggerTranscription} disabled={taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'transcribe_podcast'}>
-                        <Mic className={`h-4 w-4 mr-2 ${taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'transcribe_podcast' ? 'animate-spin' : ''}`} />
-                        {taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'transcribe_podcast' ? 'Processing...' : 'Trigger Transcription'}
+                    <Button size="sm" onClick={handleTriggerTranscription} disabled={taskMutation.isPending && taskMutation.variables?.taskName === 'transcribe_podcast'}>
+                        <Mic className={`h-4 w-4 mr-2 ${taskMutation.isPending && taskMutation.variables?.taskName === 'transcribe_podcast' ? 'animate-spin' : ''}`} />
+                        {taskMutation.isPending && taskMutation.variables?.taskName === 'transcribe_podcast' ? 'Processing...' : 'Trigger Transcription'}
                     </Button>
-                     <Button size="sm" onClick={handleTriggerEnrichment} disabled={taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'enrichment_pipeline'}>
-                        <BarChartBig className={`h-4 w-4 mr-2 ${taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'enrichment_pipeline' ? 'animate-spin' : ''}`} />
-                        {taskMutation.status === 'pending' && taskMutation.variables?.taskName === 'enrichment_pipeline' ? 'Enriching...' : 'Trigger Enrichment'}
+                     <Button size="sm" onClick={handleTriggerEnrichment} disabled={enrichMutation.isPending}>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${enrichMutation.isPending ? 'animate-spin' : ''}`} />
+                        {enrichMutation.isPending ? 'Refreshing...' : 'Refresh Podcast Data'}
                     </Button>
                 </CardContent>
             </Card>
            )}
         </CardContent>
       </Card>
+
+      {isAdminOrStaff && media?.quality_score !== undefined && media?.quality_score !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality Score</CardTitle>
+            <CardDescription>
+              Overall content quality score. Last calculated: {media.quality_score_last_calculated ? new Date(media.quality_score_last_calculated).toLocaleString() : 'N/A'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center gap-6">
+            <div className="flex flex-col items-center justify-center">
+              <div className="text-5xl font-bold text-primary">
+                {Math.round(media.quality_score * 100)}
+              </div>
+              <div className="text-sm text-gray-500">Overall Score</div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm flex-grow">
+                <div className="flex justify-between">
+                    <span>Recency Score:</span>
+                    <span className="font-semibold">{media.quality_score_recency !== null && media.quality_score_recency !== undefined ? `${Math.round(media.quality_score_recency * 100)}%` : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>Frequency Score:</span>
+                    <span className="font-semibold">{media.quality_score_frequency !== null && media.quality_score_frequency !== undefined ? `${Math.round(media.quality_score_frequency * 100)}%` : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>Audience Score:</span>
+                    <span className="font-semibold">{media.quality_score_audience !== null && media.quality_score_audience !== undefined ? `${Math.round(media.quality_score_audience * 100)}%` : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>Social Score:</span>
+                    <span className="font-semibold">{media.quality_score_social !== null && media.quality_score_social !== undefined ? `${Math.round(media.quality_score_social * 100)}%` : 'N/A'}</span>
+                </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -387,4 +484,4 @@ export default function MediaDetail() {
       </Card>
     </div>
   );
-} 
+}

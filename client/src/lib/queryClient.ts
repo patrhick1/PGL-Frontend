@@ -30,23 +30,60 @@ export async function apiRequest(
   // urlPath should be the full path from the server root, e.g., "/token", "/campaigns/"
   const fullUrl = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
   
-  const res = await fetch(fullUrl, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include", // Important for sending cookies
-  });
+  const headers: Record<string, string> = {};
+  if (data) {
+    headers["Content-Type"] = "application/json";
+  }
 
-  // No throwIfResNotOk here, let the caller handle it or use it in getQueryFn
-  return res; // Return the raw response
+  try {
+    const res = await fetch(fullUrl, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include", // Important for sending cookies
+    });
+
+    // Log failed requests for debugging (only in development)
+    if (!res.ok && import.meta.env.DEV) {
+      console.warn(`API Request failed: ${method} ${fullUrl}`, {
+        status: res.status,
+        statusText: res.statusText,
+        url: fullUrl
+      });
+    }
+
+    return res; // Return the raw response
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error(`API Request error: ${method} ${fullUrl}`, error);
+    }
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
 export const getQueryFn = <T>(options?: { on401?: UnauthorizedBehavior }): QueryFunction<T> =>
   async ({ queryKey }) => {
-    const urlPath = queryKey[0] as string; // urlPath should be the full path from server root
-    const fullUrl = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
+    const urlPath = queryKey[0] as string; 
+    const paramsObject = queryKey.length > 1 && typeof queryKey[1] === 'object' && queryKey[1] !== null 
+                         ? queryKey[1] as Record<string, any> 
+                         : undefined;
+
+    let fullUrl = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
+
+    if (paramsObject) {
+      const queryParams = new URLSearchParams();
+      for (const key in paramsObject) {
+        if (Object.prototype.hasOwnProperty.call(paramsObject, key) && paramsObject[key] !== undefined) {
+          queryParams.append(key, String(paramsObject[key]));
+        }
+      }
+      const queryString = queryParams.toString();
+      if (queryString) {
+        fullUrl += `?${queryString}`;
+      }
+    }
     
     const res = await fetch(fullUrl, {
       credentials: "include",

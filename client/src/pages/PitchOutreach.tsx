@@ -15,11 +15,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, Edit3, Check, X, ListChecks, MailCheck, MailOpen, RefreshCw, ExternalLink, Eye, MessageSquare, Filter, Search, Lightbulb, Info, Save, LinkIcon } from "lucide-react";
+import { Send, Edit3, Check, X, ListChecks, MailCheck, MailOpen, RefreshCw, ExternalLink, Eye, MessageSquare, Filter, Search, Lightbulb, Info, Save, LinkIcon, SendHorizontal, CheckSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PitchTemplate } from "@/pages/PitchTemplates.tsx"; // Added .tsx extension
+import { Checkbox } from "@/components/ui/checkbox";
 
 // --- Interfaces (Aligned with expected enriched backend responses) ---
 
@@ -103,21 +104,57 @@ type EditDraftFormData = z.infer<typeof editDraftSchema>;
 // --- Tab Components ---
 
 function ReadyForDraftTab({
-    approvedMatches, onGenerate, isLoadingGenerateForMatchId, templates, isLoadingMatches
+    approvedMatches, onGenerate, onGenerateBatch, isLoadingGenerateForMatchId, isLoadingBatchGenerate, templates, isLoadingMatches
 }: {
     approvedMatches: ApprovedMatchForPitching[];
     onGenerate: (matchId: number, templateId: string) => void;
+    onGenerateBatch: (items: { match_id: number; pitch_template_id: string }[]) => void;
     isLoadingGenerateForMatchId: number | null;
+    isLoadingBatchGenerate: boolean;
     templates: PitchTemplate[];
     isLoadingMatches: boolean;
 }) {
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+    const [selectedMatchIds, setSelectedMatchIds] = useState<number[]>([]);
+    const [selectAll, setSelectAll] = useState(false);
+
+    // Filter out subject_line_v1 template
+    const filteredTemplates = templates.filter(t => t.template_id !== "subject_line_v1");
 
     useEffect(() => {
-        if (templates && templates.length > 0 && !selectedTemplateId) {
-            setSelectedTemplateId(templates[0].template_id);
+        if (filteredTemplates && filteredTemplates.length > 0 && !selectedTemplateId) {
+            setSelectedTemplateId(filteredTemplates[0].template_id);
         }
-    }, [templates, selectedTemplateId]);
+    }, [filteredTemplates, selectedTemplateId]);
+
+    const handleSelectAll = (checked: boolean) => {
+        setSelectAll(checked);
+        if (checked) {
+            setSelectedMatchIds(approvedMatches.map(m => m.match_id));
+        } else {
+            setSelectedMatchIds([]);
+        }
+    };
+
+    const handleSelectMatch = (matchId: number, checked: boolean) => {
+        if (checked) {
+            setSelectedMatchIds([...selectedMatchIds, matchId]);
+        } else {
+            setSelectedMatchIds(selectedMatchIds.filter(id => id !== matchId));
+            setSelectAll(false);
+        }
+    };
+
+    const handleBatchGenerate = () => {
+        if (selectedMatchIds.length === 0 || !selectedTemplateId) return;
+        const batchItems = selectedMatchIds.map(match_id => ({
+            match_id,
+            pitch_template_id: selectedTemplateId
+        }));
+        onGenerateBatch(batchItems);
+        setSelectedMatchIds([]);
+        setSelectAll(false);
+    };
 
     if (isLoadingMatches) {
         return (
@@ -128,48 +165,88 @@ function ReadyForDraftTab({
         );
     }
     if (!approvedMatches || approvedMatches.length === 0) {
-        return <div className="text-center py-8 text-gray-500"><Info className="mx-auto h-10 w-10 mb-2"/>No matches currently approved and awaiting pitch drafts.</div>;
+        return <div className="text-center py-8 text-gray-500"><Info className="mx-auto h-10 w-10 mb-2"/>No approved matches awaiting pitch generation.</div>;
     }
 
     return (
         <div className="space-y-6">
-            <div>
-                <label htmlFor="pitch-template-select" className="text-sm font-medium block mb-2 text-gray-700">Select Pitch Template:</label>
-                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={!templates || templates.length === 0}>
-                  <SelectTrigger id="pitch-template-select" className="w-full md:w-1/2 lg:w-1/3">
-                      <SelectValue placeholder="Select pitch template..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(!templates || templates.length === 0) && <SelectItem value="" disabled>No templates available. Create one in Pitch Templates.</SelectItem>}
-                    {templates && templates.map(opt => <SelectItem key={opt.template_id} value={opt.template_id}>{opt.template_id} (Tone: {opt.tone || 'N/A'})</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
+                <div className="flex-1">
+                    <label htmlFor="pitch-template-select" className="text-sm font-medium block mb-2 text-gray-700">Select Pitch Template:</label>
+                    <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={!filteredTemplates || filteredTemplates.length === 0}>
+                      <SelectTrigger id="pitch-template-select" className="w-full md:w-2/3">
+                          <SelectValue placeholder="Select pitch template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(!filteredTemplates || filteredTemplates.length === 0) && <SelectItem value="" disabled>No templates available. Create one in Pitch Templates.</SelectItem>}
+                        {filteredTemplates && filteredTemplates.map(opt => <SelectItem key={opt.template_id} value={opt.template_id}>{opt.template_id} (Tone: {opt.tone || 'N/A'})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                </div>
+                
+                {/* Batch Actions */}
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            checked={selectAll}
+                            onCheckedChange={handleSelectAll}
+                            disabled={isLoadingBatchGenerate}
+                        />
+                        <span className="text-sm text-gray-600">
+                            {selectedMatchIds.length === 0 
+                                ? "Select all" 
+                                : `${selectedMatchIds.length} selected`}
+                        </span>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="default"
+                        onClick={handleBatchGenerate}
+                        disabled={selectedMatchIds.length === 0 || !selectedTemplateId || isLoadingBatchGenerate}
+                        className="bg-primary hover:bg-primary/90"
+                    >
+                        {isLoadingBatchGenerate ? (
+                            <><RefreshCw className="h-4 w-4 animate-spin mr-1.5"/> Generating...</>
+                        ) : (
+                            <><Lightbulb className="h-4 w-4 mr-1.5"/> Generate Selected ({selectedMatchIds.length})</>
+                        )}
+                    </Button>
+                </div>
             </div>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+            
+            <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2">
                 {approvedMatches.map((match) => (
                     <Card key={match.match_id} className="p-4 hover:shadow-md transition-shadow">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center">
-                            <div className="mb-3 sm:mb-0 flex-1">
-                                <h4 className="font-semibold text-gray-800">{match.media_name || `Media ID: ${match.media_id}`}</h4>
-                                <p className="text-xs text-gray-500">
-                                    For Campaign: {match.campaign_name || `ID: ${match.campaign_id.substring(0,8)}...`}
-                                    {match.client_name && ` (Client: ${match.client_name})`}
-                                </p>
-                                {match.media_website && (
-                                    <a href={match.media_website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center mt-1">
-                                        <ExternalLink className="h-3 w-3 mr-1"/> Visit Podcast
-                                    </a>
-                                )}
+                        <div className="flex items-start space-x-3">
+                            <Checkbox
+                                checked={selectedMatchIds.includes(match.match_id)}
+                                onCheckedChange={(checked) => handleSelectMatch(match.match_id, checked as boolean)}
+                                disabled={isLoadingBatchGenerate || isLoadingGenerateForMatchId === match.match_id}
+                                className="mt-1"
+                            />
+                            <div className="flex-1 flex flex-col sm:flex-row justify-between sm:items-center">
+                                <div className="mb-3 sm:mb-0 flex-1">
+                                    <h4 className="font-semibold text-gray-800">{match.media_name || `Media ID: ${match.media_id}`}</h4>
+                                    <p className="text-xs text-gray-500">
+                                        For Campaign: {match.campaign_name || `ID: ${match.campaign_id.substring(0,8)}...`}
+                                        {match.client_name && ` (Client: ${match.client_name})`}
+                                    </p>
+                                    {match.media_website && (
+                                        <a href={match.media_website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center mt-1">
+                                            <ExternalLink className="h-3 w-3 mr-1"/> Visit Podcast
+                                        </a>
+                                    )}
+                                </div>
+                                <Button
+                                    size="sm"
+                                    onClick={() => onGenerate(match.match_id, selectedTemplateId)}
+                                    disabled={isLoadingBatchGenerate || isLoadingGenerateForMatchId === match.match_id || !selectedTemplateId || !filteredTemplates || filteredTemplates.length === 0}
+                                    className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto"
+                                >
+                                    {isLoadingGenerateForMatchId === match.match_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Lightbulb className="h-4 w-4 mr-1"/>}
+                                    Generate Pitch
+                                </Button>
                             </div>
-                            <Button
-                                size="sm"
-                                onClick={() => onGenerate(match.match_id, selectedTemplateId)}
-                                disabled={isLoadingGenerateForMatchId === match.match_id || !selectedTemplateId || !templates || templates.length === 0}
-                                className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto"
-                            >
-                                {isLoadingGenerateForMatchId === match.match_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Lightbulb className="h-4 w-4 mr-1"/>}
-                                Generate Pitch Draft
-                            </Button>
                         </div>
                     </Card>
                 ))}
@@ -328,49 +405,131 @@ function DraftsReviewTab({
 }
 
 function ReadyToSendTab({
-    pitches, onSend, isLoadingSendForPitchId, isLoadingPitches
+    pitches, onSend, onBulkSend, onPreview, isLoadingSendForPitchId, isLoadingBulkSend, isLoadingPitches
 }: {
     pitches: PitchReadyToSend[];
     onSend: (pitchId: number) => void;
+    onBulkSend: (pitchIds: number[]) => void;
+    onPreview: (pitch: PitchReadyToSend) => void;
     isLoadingSendForPitchId: number | null;
+    isLoadingBulkSend: boolean;
     isLoadingPitches: boolean;
 }) {
+    const [selectedPitchIds, setSelectedPitchIds] = useState<number[]>([]);
+    const [selectAll, setSelectAll] = useState(false);
+
+    const handleSelectAll = (checked: boolean) => {
+        setSelectAll(checked);
+        if (checked) {
+            setSelectedPitchIds(pitches.map(p => p.pitch_id));
+        } else {
+            setSelectedPitchIds([]);
+        }
+    };
+
+    const handleSelectPitch = (pitchId: number, checked: boolean) => {
+        if (checked) {
+            setSelectedPitchIds([...selectedPitchIds, pitchId]);
+        } else {
+            setSelectedPitchIds(selectedPitchIds.filter(id => id !== pitchId));
+            setSelectAll(false);
+        }
+    };
+
+    const handleBulkSend = () => {
+        if (selectedPitchIds.length === 0) return;
+        onBulkSend(selectedPitchIds);
+        setSelectedPitchIds([]);
+        setSelectAll(false);
+    };
+
     if (isLoadingPitches) {
         return <div className="space-y-3"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>;
     }
     if (!pitches || pitches.length === 0) {
         return <div className="text-center py-8 text-gray-500"><Info className="mx-auto h-10 w-10 mb-2"/>No pitches currently approved and ready to send.</div>;
     }
+    
     return (
-        <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-            {pitches.map((pitch) => (
-                <Card key={pitch.pitch_id} className="p-4 hover:shadow-md transition-shadow">
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-start">
-                        <div className="flex-1 mb-3 sm:mb-0">
-                            <h4 className="font-semibold text-gray-800">{pitch.media_name || `Media ID: ${pitch.media_id}`}</h4>
-                            <p className="text-xs text-gray-500">Campaign: {pitch.campaign_name || 'N/A'} (Client: {pitch.client_name || 'N/A'})</p>
-                            <p className="text-xs text-gray-600 mt-1 italic">Subject: {pitch.subject_line || "Not set"}</p>
-                            <p className="text-xs text-gray-600 mt-1 italic line-clamp-2">
-                                Preview: {(pitch.final_text || pitch.draft_text || "No content").substring(0,100) + "..."}
-                            </p>
-                             {pitch.media_website && (
-                                <a href={pitch.media_website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center mt-1">
-                                    <ExternalLink className="h-3 w-3 mr-1"/> Visit Podcast
-                                </a>
-                            )}
+        <div className="space-y-4">
+            {/* Bulk Actions Bar */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                <div className="flex items-center space-x-3">
+                    <Checkbox 
+                        checked={selectAll}
+                        onCheckedChange={handleSelectAll}
+                        disabled={isLoadingBulkSend}
+                    />
+                    <span className="text-sm text-gray-600">
+                        {selectedPitchIds.length === 0 
+                            ? "Select all" 
+                            : `${selectedPitchIds.length} of ${pitches.length} selected`}
+                    </span>
+                </div>
+                <Button
+                    size="sm"
+                    variant="default"
+                    onClick={handleBulkSend}
+                    disabled={selectedPitchIds.length === 0 || isLoadingBulkSend}
+                    className="bg-blue-600 hover:bg-blue-700"
+                >
+                    {isLoadingBulkSend ? (
+                        <><RefreshCw className="h-4 w-4 animate-spin mr-1.5"/> Sending...</>
+                    ) : (
+                        <><SendHorizontal className="h-4 w-4 mr-1.5"/> Send Selected ({selectedPitchIds.length})</>
+                    )}
+                </Button>
+            </div>
+
+            {/* Pitch Cards */}
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                {pitches.map((pitch) => (
+                    <Card key={pitch.pitch_id} className="p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start space-x-3">
+                            <Checkbox
+                                checked={selectedPitchIds.includes(pitch.pitch_id)}
+                                onCheckedChange={(checked) => handleSelectPitch(pitch.pitch_id, checked as boolean)}
+                                disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_id}
+                                className="mt-1"
+                            />
+                            <div className="flex-1 flex flex-col sm:flex-row justify-between sm:items-start">
+                                <div className="flex-1 mb-3 sm:mb-0">
+                                    <h4 className="font-semibold text-gray-800">{pitch.media_name || `Media ID: ${pitch.media_id}`}</h4>
+                                    <p className="text-xs text-gray-500">Campaign: {pitch.campaign_name || 'N/A'} (Client: {pitch.client_name || 'N/A'})</p>
+                                    <p className="text-xs text-gray-600 mt-1 italic">Subject: {pitch.subject_line || "Not set"}</p>
+                                    <p className="text-xs text-gray-600 mt-1 italic line-clamp-2">
+                                        Preview: {(pitch.final_text || pitch.draft_text || "No content").substring(0,100) + "..."}
+                                    </p>
+                                     {pitch.media_website && (
+                                        <a href={pitch.media_website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center mt-1">
+                                            <ExternalLink className="h-3 w-3 mr-1"/> Visit Podcast
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => onPreview(pitch)}
+                                        disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_id}
+                                    >
+                                        <Eye className="h-3.5 w-3.5 mr-1"/> Preview
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                        onClick={() => onSend(pitch.pitch_id)}
+                                        disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_id}
+                                    >
+                                        {isLoadingSendForPitchId === pitch.pitch_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Send className="h-4 w-4 mr-1.5"/>}
+                                        Send
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                        <Button
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700 text-white mt-2 sm:mt-0 w-full sm:w-auto"
-                            onClick={() => onSend(pitch.pitch_id)}
-                            disabled={isLoadingSendForPitchId === pitch.pitch_id}
-                        >
-                            {isLoadingSendForPitchId === pitch.pitch_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Send className="h-4 w-4 mr-1.5"/>}
-                            Send Pitch
-                        </Button>
-                    </div>
-                </Card>
-            ))}
+                    </Card>
+                ))}
+            </div>
         </div>
     );
 }
@@ -430,11 +589,15 @@ export default function PitchOutreach() {
   const [activeTab, setActiveTab] = useState<string>("readyForDraft");
   const [editingDraft, setEditingDraft] = useState<PitchDraftForReview | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [previewPitch, setPreviewPitch] = useState<PitchReadyToSend | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   // Per-item loading states
   const [isLoadingGenerateForMatchId, setIsLoadingGenerateForMatchId] = useState<number | null>(null);
   const [isLoadingApproveForPitchGenId, setIsLoadingApproveForPitchGenId] = useState<number | null>(null);
   const [isLoadingSendForPitchId, setIsLoadingSendForPitchId] = useState<number | null>(null);
+  const [isLoadingBulkSend, setIsLoadingBulkSend] = useState(false);
+  const [isLoadingBatchGenerate, setIsLoadingBatchGenerate] = useState(false);
 
   // State for pagination for "Review Drafts" tab
   const [reviewDraftsPage, setReviewDraftsPage] = useState(1);
@@ -456,16 +619,15 @@ export default function PitchOutreach() {
 
   // --- Data Fetching with React Query ---
 
-  // 1. Fetch Approved Matches (for "Ready for Draft" tab)
+  // 1. Fetch Approved Matches without pitches (for "Ready for Draft" tab)
   const { data: approvedMatchesData, isLoading: isLoadingApprovedMatches, error: approvedMatchesError } = useQuery<ApprovedMatchForPitching[]>({
-    queryKey: ["approvedMatchesForPitching", initialCampaignIdFilter], // Add filter to key if used
+    queryKey: ["approvedMatchesForPitching", initialCampaignIdFilter],
     queryFn: async ({ queryKey }) => {
       const [, campaignId] = queryKey as [string, string | null];
-      let url = `/match-suggestions/?status=approved`;
-      if (campaignId) url += `&campaign_id=${campaignId}`;
+      let url = `/match-suggestions/approved-without-pitches`;
+      if (campaignId) url += `?campaign_id=${campaignId}`;
       const response = await apiRequest("GET", url);
-      if (!response.ok) throw new Error("Failed to fetch approved matches");
-      // Assuming backend /match-suggestions/ (with get_all_match_suggestions_enriched) returns enriched data
+      if (!response.ok) throw new Error("Failed to fetch approved matches without pitches");
       return response.json();
     },
     staleTime: 1000 * 60 * 2,
@@ -483,14 +645,17 @@ export default function PitchOutreach() {
       if (campaignId) url += `&campaign_id=${campaignId}`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch pitch drafts for review");
-      // Assuming backend /review-tasks/ returns enriched data as PitchDraftForReview
+      // Backend status filter not working correctly - returns completed tasks when requesting pending
+      // Client-side filtering applied as workaround
       return response.json();
     },
     staleTime: 1000 * 60 * 1,
   });
-  const pitchDraftsForReview = reviewTasksPageData?.items || [];
-  const reviewDraftsTotalItems = reviewTasksPageData?.total || 0;
-  const reviewDraftsTotalPages = reviewTasksPageData?.pages || Math.ceil(reviewDraftsTotalItems / REVIEW_DRAFTS_PAGE_SIZE);
+  // Filter out non-pending tasks (backend status filter not working correctly)
+  const allPitchDrafts = reviewTasksPageData?.items || [];
+  const pitchDraftsForReview = allPitchDrafts.filter(draft => draft.status === 'pending');
+  const reviewDraftsTotalItems = pitchDraftsForReview.length;
+  const reviewDraftsTotalPages = Math.ceil(reviewDraftsTotalItems / REVIEW_DRAFTS_PAGE_SIZE);
 
 
   // 3. Fetch Pitches Ready to Send
@@ -498,7 +663,7 @@ export default function PitchOutreach() {
     queryKey: ["pitchesReadyToSend", initialCampaignIdFilter],
     queryFn: async ({ queryKey }) => {
       const [, campaignId] = queryKey as [string, string | null];
-      let url = `/pitches/?pitch_state=ready_to_send`; // Backend should filter for pitches linked to approved pitch_generations
+      let url = `/pitches/?pitch_state__in=ready_to_send`; // Using __in filter as per backend documentation
       if (campaignId) url += `&campaign_id=${campaignId}`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch pitches ready to send");
@@ -514,11 +679,15 @@ export default function PitchOutreach() {
     queryKey: ["sentPitchesStatus", initialCampaignIdFilter],
     queryFn: async ({ queryKey }) => {
       const [, campaignId] = queryKey as [string, string | null];
-      let url = `/pitches/?pitch_state__in=sent,opened,replied,clicked,replied_interested,live,paid,lost`; // Use appropriate states
-      if (campaignId) url += `&campaign_id=${campaignId}`;
+      // Build query with multiple pitch_state__in parameters
+      const states = ['sent', 'opened', 'replied', 'clicked', 'replied_interested', 'live', 'paid', 'lost'];
+      const params = new URLSearchParams();
+      states.forEach(state => params.append('pitch_state__in', state));
+      if (campaignId) params.append('campaign_id', campaignId);
+      
+      const url = `/pitches/?${params.toString()}`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch sent pitches");
-      // Assuming backend /pitches/ returns enriched SentPitchStatus data
       return response.json();
     },
     refetchInterval: 1000 * 60 * 5, // Refetch every 5 minutes
@@ -542,6 +711,32 @@ export default function PitchOutreach() {
     },
     onError: (error: any) => { toast({ title: "Generation Failed", description: error.message, variant: "destructive" }); },
     onSettled: () => { setIsLoadingGenerateForMatchId(null); }
+  });
+
+  const generateBatchPitchDraftsMutation = useMutation({
+    mutationFn: async (items: { match_id: number; pitch_template_id: string }[]) => {
+      setIsLoadingBatchGenerate(true);
+      const response = await apiRequest("POST", "/pitches/generate-batch", items);
+      if (!response.ok) { 
+        const errorData = await response.json().catch(() => ({ detail: "Failed to generate batch pitches." })); 
+        throw new Error(errorData.detail); 
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const count = Array.isArray(data) ? data.length : data.count || 'multiple';
+      toast({ 
+        title: "Batch Generation Complete", 
+        description: `Successfully generated ${count} pitch draft${count !== 1 ? 's' : ''}. Ready for review.` 
+      });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+      setActiveTab("draftsReview");
+    },
+    onError: (error: any) => { 
+      toast({ title: "Batch Generation Failed", description: error.message, variant: "destructive" }); 
+    },
+    onSettled: () => { setIsLoadingBatchGenerate(false); }
   });
 
   const approvePitchDraftMutation = useMutation({
@@ -596,15 +791,55 @@ export default function PitchOutreach() {
     onSettled: () => { setIsLoadingSendForPitchId(null); }
   });
 
+  const bulkSendPitchesMutation = useMutation({
+    mutationFn: async (pitchIds: number[]) => {
+        setIsLoadingBulkSend(true);
+        const response = await apiRequest("POST", `/pitches/bulk-send`, { pitch_ids: pitchIds });
+        if (!response.ok) { 
+            const errorData = await response.json().catch(() => ({ detail: "Failed to send pitches." })); 
+            throw new Error(errorData.detail); 
+        }
+        return response.json();
+    },
+    onSuccess: (data) => {
+        const successCount = data.results?.filter((r: any) => r.success).length || 0;
+        const failCount = data.results?.filter((r: any) => !r.success).length || 0;
+        
+        let description = `Successfully sent ${successCount} pitch${successCount !== 1 ? 'es' : ''}.`;
+        if (failCount > 0) {
+            description += ` ${failCount} failed.`;
+        }
+        
+        toast({ 
+            title: "Bulk Send Complete", 
+            description,
+            variant: failCount > 0 ? "default" : "default"
+        });
+        
+        tanstackQueryClient.invalidateQueries({ queryKey: ["pitchesReadyToSend"] });
+        tanstackQueryClient.invalidateQueries({ queryKey: ["sentPitchesStatus"] });
+        setActiveTab("sentPitches");
+    },
+    onError: (error: any) => { 
+        toast({ title: "Bulk Send Failed", description: error.message, variant: "destructive" }); 
+    },
+    onSettled: () => { setIsLoadingBulkSend(false); }
+  });
+
 
   const handleGeneratePitch = (matchId: number, templateId: string) => {
     if (!templateId) { toast({ title: "Template Required", description: "Please select a pitch template.", variant: "destructive"}); return; }
     generatePitchDraftMutation.mutate({ matchId, pitch_template_id: templateId });
   };
+  const handleGenerateBatchPitches = (items: { match_id: number; pitch_template_id: string }[]) => {
+    generateBatchPitchDraftsMutation.mutate(items);
+  };
   const handleApprovePitch = (pitchGenId: number) => { approvePitchDraftMutation.mutate(pitchGenId); };
   const handleSendPitch = (pitchId: number) => { sendPitchMutation.mutate(pitchId); };
+  const handleBulkSendPitches = (pitchIds: number[]) => { bulkSendPitchesMutation.mutate(pitchIds); };
   const handleOpenEditModal = (draft: PitchDraftForReview) => { setEditingDraft(draft); setIsEditModalOpen(true); };
   const handleSaveEditedDraft = (pitchGenId: number, data: EditDraftFormData) => { updatePitchDraftMutation.mutate({ pitchGenId, data }); };
+  const handlePreviewPitch = (pitch: PitchReadyToSend) => { setPreviewPitch(pitch); setIsPreviewModalOpen(true); };
 
   const handleReviewDraftsPageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= reviewDraftsTotalPages) {
@@ -627,7 +862,7 @@ export default function PitchOutreach() {
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-1">
           <TabsTrigger value="readyForDraft"><Lightbulb className="mr-1.5 h-4 w-4"/>Ready for Draft ({isLoadingApprovedMatches ? '...' : approvedMatches.length})</TabsTrigger>
-          <TabsTrigger value="draftsReview"><Edit3 className="mr-1.5 h-4 w-4"/>Review Drafts ({isLoadingPitchDrafts ? '...' : reviewDraftsTotalItems})</TabsTrigger>
+          <TabsTrigger value="draftsReview"><Edit3 className="mr-1.5 h-4 w-4"/>Review Drafts ({isLoadingPitchDrafts ? '...' : pitchDraftsForReview.length})</TabsTrigger>
           <TabsTrigger value="readyToSend"><MailCheck className="mr-1.5 h-4 w-4"/>Ready to Send ({isLoadingReadyToSend ? '...' : pitchesReadyToSend.length})</TabsTrigger>
           <TabsTrigger value="sentPitches"><MailOpen className="mr-1.5 h-4 w-4"/>Sent Pitches ({isLoadingSentPitches ? '...' : sentPitches.length})</TabsTrigger>
         </TabsList>
@@ -636,7 +871,9 @@ export default function PitchOutreach() {
           <ReadyForDraftTab
             approvedMatches={approvedMatches}
             onGenerate={handleGeneratePitch}
+            onGenerateBatch={handleGenerateBatchPitches}
             isLoadingGenerateForMatchId={isLoadingGenerateForMatchId}
+            isLoadingBatchGenerate={isLoadingBatchGenerate}
             templates={pitchTemplates}
             isLoadingMatches={isLoadingApprovedMatches || isLoadingTemplates}
           />
@@ -662,7 +899,10 @@ export default function PitchOutreach() {
            <ReadyToSendTab
              pitches={pitchesReadyToSend}
              onSend={handleSendPitch}
+             onBulkSend={handleBulkSendPitches}
+             onPreview={handlePreviewPitch}
              isLoadingSendForPitchId={isLoadingSendForPitchId}
+             isLoadingBulkSend={isLoadingBulkSend}
              isLoadingPitches={isLoadingReadyToSend}
            />
            {pitchesReadyError && <p className="text-red-500 mt-2">Error loading pitches ready to send: {(pitchesReadyError as Error).message}</p>}
@@ -681,6 +921,69 @@ export default function PitchOutreach() {
         onSave={handleSaveEditedDraft}
         isSaving={updatePitchDraftMutation.isPending}
       />
+
+      {/* Pitch Preview Modal */}
+      <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pitch Preview</DialogTitle>
+            <DialogDescription>
+              {previewPitch?.media_name} - {previewPitch?.campaign_name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {previewPitch && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-sm text-gray-700 mb-1">To:</h4>
+                <p className="text-sm">{previewPitch.media_name}</p>
+                {previewPitch.media_website && (
+                  <a href={previewPitch.media_website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center mt-1">
+                    <ExternalLink className="h-3 w-3 mr-1"/> {previewPitch.media_website}
+                  </a>
+                )}
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-sm text-gray-700 mb-1">Subject:</h4>
+                <p className="text-sm bg-gray-50 p-2 rounded">{previewPitch.subject_line || "No subject line set"}</p>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-sm text-gray-700 mb-1">Body:</h4>
+                <div className="bg-gray-50 p-4 rounded whitespace-pre-wrap text-sm">
+                  {previewPitch.final_text || previewPitch.draft_text || "No content available"}
+                </div>
+              </div>
+              
+              <div className="text-xs text-gray-500">
+                <p>Campaign: {previewPitch.campaign_name}</p>
+                <p>Client: {previewPitch.client_name}</p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>Close</Button>
+            <Button 
+              onClick={() => {
+                if (previewPitch) {
+                  handleSendPitch(previewPitch.pitch_id);
+                  setIsPreviewModalOpen(false);
+                }
+              }}
+              disabled={isLoadingSendForPitchId === previewPitch?.pitch_id}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isLoadingSendForPitchId === previewPitch?.pitch_id ? (
+                <><RefreshCw className="h-4 w-4 animate-spin mr-1"/> Sending...</>
+              ) : (
+                <><Send className="h-4 w-4 mr-1.5"/> Send Pitch</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

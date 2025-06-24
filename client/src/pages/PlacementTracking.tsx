@@ -346,6 +346,56 @@ function PlacementTable({ placements, onEdit, onDelete, userRole }: {
   );
 }
 
+// --- Card View for Clients ---
+function ClientPlacementCard({ placement }: { placement: Placement }) {
+  const currentStatusKey = placement.current_status || 'default';
+  const config = statusConfig[currentStatusKey] || statusConfig.default;
+  const StatusIcon = config.icon;
+
+  const dates = [
+    { label: "Recording Date", date: placement.recording_date },
+    { label: "Go-Live Date", date: placement.go_live_date },
+  ].filter(d => d.date);
+
+  return (
+    <Card className="shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-lg">{placement.media_name}</CardTitle>
+              <CardDescription>Campaign: {placement.campaign_name}</CardDescription>
+            </div>
+            <Badge className={`${config.color} font-medium text-xs`}>
+              <StatusIcon className="w-3 h-3 mr-1.5" />
+              {config.label}
+            </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {dates.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                {dates.map(d => (
+                    <div key={d.label}>
+                        <p className="font-medium text-gray-500">{d.label}</p>
+                        <p>{new Date(d.date + 'T00:00:00').toLocaleDateString()}</p>
+                    </div>
+                ))}
+            </div>
+        )}
+        {placement.episode_link && (
+            <div className="pt-3 border-t">
+                 <a href={placement.episode_link} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" className="w-full">
+                        <PlayCircle className="h-4 w-4 mr-2"/> Listen to Episode
+                    </Button>
+                 </a>
+            </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 
 export default function PlacementTracking() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -550,6 +600,10 @@ export default function PlacementTracking() {
           <PodcastIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900">No placements found</h3>
           <p className="text-gray-600">Try adjusting your filters or search terms. {user?.role !== 'client' && "Or add a new placement."}</p>
+        </div>
+      ) : user?.role === 'client' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPlacements.map(p => <ClientPlacementCard key={p.placement_id} placement={p} />)}
         </div>
       ) : (
         <div>

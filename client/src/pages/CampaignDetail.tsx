@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator"; // Added Separator
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CampaignFunnel } from "@/components/CampaignFunnel";
 
 // --- Interfaces (Ensure these match your actual backend responses) ---
 interface CampaignDetailData {
@@ -34,6 +35,14 @@ interface CampaignDetailData {
   client_full_name?: string; // Populated if needed
 }
 
+interface CampaignStats {
+    discovered: number;
+    vetted: number;
+    pitched: number;
+    responses: number;
+    bookings: number;
+}
+
 interface MatchSuggestionForCampaign {
   match_id: number;
   media_id: number;
@@ -43,6 +52,7 @@ interface MatchSuggestionForCampaign {
   ai_reasoning?: string | null;
   match_score?: number | null;
   created_at: string;
+  review_task_id?: number | null; // Added to support review-tasks endpoint
 }
 
 interface PitchForCampaign { // Simplified from PitchInDB
@@ -76,62 +86,103 @@ interface CampaignDetailProps {
 
 // --- Tab Content Components (Can be moved to separate files) ---
 
-function CampaignOverviewTab({ campaign, onReprocess }: { campaign: CampaignDetailData; onReprocess: () => void; }) {
+function CampaignOverviewTab({ campaign, onReprocess, stats }: { campaign: CampaignDetailData; onReprocess: () => void; stats?: CampaignStats | null; }) {
   const { user } = useAuth();
   const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
 
+  const defaultStats = { discovered: 0, vetted: 0, pitched: 0, responses: 0, bookings: 0 };
+
+  // Check for internal media kit
+  const { data: internalMediaKit } = useQuery({
+    queryKey: ["mediaKitData", campaign.campaign_id],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/campaigns/${campaign.campaign_id}/media-kit`);
+      if (response.status === 404) return null;
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!campaign.campaign_id,
+  });
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Campaign Overview</CardTitle>
-        <CardDescription>Key details and settings for this campaign.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-            <p><strong>Campaign Name:</strong> {campaign.campaign_name}</p>
-            <p><strong>Client:</strong> {campaign.client_full_name || `Person ID: ${campaign.person_id}`}</p>
-            <p><strong>Campaign Type:</strong> {campaign.campaign_type || "N/A"}</p>
-            <p><strong>Created:</strong> {new Date(campaign.created_at).toLocaleDateString()}</p>
-            <div>
-                <span className="font-semibold">Keywords: </span>
-                {campaign.campaign_keywords && campaign.campaign_keywords.length > 0 ? 
-                    campaign.campaign_keywords.map(kw => <Badge key={kw} variant="secondary" className="mr-1 mb-1">{kw}</Badge>) : 
-                    <span className="text-gray-500">Not set</span>}
+    <div className="space-y-6">
+        <Card>
+            <CardHeader>
+            <CardTitle>Campaign Funnel</CardTitle>
+            <CardDescription>A visual representation of your campaign's progress.</CardDescription>
+            </CardHeader>
+            <CardContent className="h-64 flex items-center justify-center">
+                {stats ? (
+                    <CampaignFunnel stats={stats} />
+                ) : (
+                    <div className="text-center text-gray-500">Stats are currently unavailable.</div>
+                )}
+            </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Campaign Details</CardTitle>
+            <CardDescription>Key details and settings for this campaign.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                <p><strong>Campaign Name:</strong> {campaign.campaign_name}</p>
+                <p><strong>Client:</strong> {campaign.client_full_name || `Person ID: ${campaign.person_id}`}</p>
+                <p><strong>Campaign Type:</strong> {campaign.campaign_type || "N/A"}</p>
+                <p><strong>Created:</strong> {new Date(campaign.created_at).toLocaleDateString()}</p>
+                {isAdminOrStaff && (
+                  <div>
+                      <span className="font-semibold">Keywords: </span>
+                      {campaign.campaign_keywords && campaign.campaign_keywords.length > 0 ? 
+                          campaign.campaign_keywords.map(kw => <Badge key={kw} variant="secondary" className="mr-1 mb-1">{kw}</Badge>) : 
+                          <span className="text-gray-500">Not set</span>}
+                  </div>
+                )}
+                <div>
+                    <span className="font-semibold">Embedding Status: </span>
+                    {campaign.embedding_status ? (
+                        <Badge 
+                          variant={
+                            campaign.embedding_status === 'completed' ? 'default' :
+                            campaign.embedding_status === 'pending' ? 'outline' :
+                            campaign.embedding_status === 'failed' ? 'destructive' :
+                            campaign.embedding_status === 'not_enough_content' ? 'secondary' :
+                            'secondary'
+                          }
+                          className={`capitalize ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : campaign.embedding_status === 'not_enough_content' ? 'bg-orange-100 text-orange-700' : ''}`}
+                        >
+                            {campaign.embedding_status.replace(/_/g, ' ')}
+                        </Badge>
+                        ) : <Badge variant="secondary">Not Started</Badge>}
+                </div>
+                <div className="md:col-span-2">
+                  <p><strong>Media Kit URL:</strong>
+                  {campaign.media_kit_url ?
+                      <a href={campaign.media_kit_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+                      View External Media Kit <ExternalLink className="inline h-3 w-3"/>
+                      </a>
+                      : " Not provided"}
+                  </p>
+                  {internalMediaKit && internalMediaKit.is_public && internalMediaKit.slug && (
+                    <p className="mt-1"><strong>Internal Media Kit:</strong>
+                      <a href={`/media-kit/${internalMediaKit.slug}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+                        View Public Media Kit <ExternalLink className="inline h-3 w-3"/>
+                      </a>
+                    </p>
+                  )}
+                </div>
             </div>
-            <div>
-                <span className="font-semibold">Embedding Status: </span>
-                {campaign.embedding_status ? (
-                    <Badge 
-                      variant={
-                        campaign.embedding_status === 'completed' ? 'default' :
-                        campaign.embedding_status === 'pending' ? 'outline' :
-                        campaign.embedding_status === 'failed' ? 'destructive' :
-                        campaign.embedding_status === 'not_enough_content' ? 'secondary' :
-                        'secondary'
-                      }
-                      className={`capitalize ${campaign.embedding_status === 'completed' ? 'bg-green-100 text-green-700' : campaign.embedding_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : campaign.embedding_status === 'not_enough_content' ? 'bg-orange-100 text-orange-700' : ''}`}
-                    >
-                        {campaign.embedding_status.replace(/_/g, ' ')}
-                    </Badge>
-                    ) : <Badge variant="secondary">Not Started</Badge>}
-            </div>
-            <p className="md:col-span-2"><strong>Media Kit URL:</strong>
-            {campaign.media_kit_url ?
-                <a href={campaign.media_kit_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
-                View Media Kit <ExternalLink className="inline h-3 w-3"/>
-                </a>
-                : " Not provided"}
-            </p>
-        </div>
-        {isAdminOrStaff && (
-            <div className="mt-4 pt-4 border-t">
-                <Button onClick={onReprocess} size="sm">
-                    <RefreshCw className="mr-2 h-4 w-4" /> Re-process Campaign Content & Embedding
-                </Button>
-            </div>
-        )}
-      </CardContent>
-    </Card>
+            {isAdminOrStaff && (
+                <div className="mt-4 pt-4 border-t">
+                    <Button onClick={onReprocess} size="sm">
+                        <RefreshCw className="mr-2 h-4 w-4" /> Re-process Campaign Content & Embedding
+                    </Button>
+                </div>
+            )}
+          </CardContent>
+        </Card>
+    </div>
   );
 }
 
@@ -261,7 +312,19 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
   });
 
   const approveMatchMutation = useMutation({
-    mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}/approve`),
+    mutationFn: ({ reviewTaskId, matchId }: { reviewTaskId: number | null; matchId: number }) => {
+      // Use review-tasks endpoint if reviewTaskId is available, otherwise fall back to match-suggestions
+      if (reviewTaskId) {
+        // IMPORTANT: Backend should verify that the current user owns the campaign associated with this review task
+        // This prevents clients from approving matches for campaigns they don't own
+        return apiRequest("POST", `/review-tasks/${reviewTaskId}/approve`, { 
+          status: 'approved', 
+          notes: 'Approved by client' 
+        });
+      }
+      // Fallback for backward compatibility
+      return apiRequest("PATCH", `/match-suggestions/${matchId}/approve`);
+    },
     onSuccess: () => {
       toast({ title: "Match Approved", description: "The match has been approved. Our team will draft a pitch." });
       tanstackQueryClient.invalidateQueries({ queryKey: ["campaignMatchesDetail", campaignId] });
@@ -271,10 +334,21 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
   });
 
   const rejectMatchMutation = useMutation({
-    mutationFn: (matchId: number) => apiRequest("PATCH", `/match-suggestions/${matchId}`, { status: 'rejected_by_client' }), // Example: update status directly
+    mutationFn: ({ reviewTaskId, matchId }: { reviewTaskId: number | null; matchId: number }) => {
+      // Use review-tasks endpoint if reviewTaskId is available, otherwise fall back to match-suggestions
+      if (reviewTaskId) {
+        return apiRequest("POST", `/review-tasks/${reviewTaskId}/approve`, { 
+          status: 'rejected', 
+          notes: 'Rejected by client' 
+        });
+      }
+      // Fallback for backward compatibility
+      return apiRequest("PATCH", `/match-suggestions/${matchId}`, { status: 'rejected_by_client' });
+    },
     onSuccess: () => {
       toast({ title: "Match Rejected", description: "The match has been marked as rejected." });
       tanstackQueryClient.invalidateQueries({ queryKey: ["campaignMatchesDetail", campaignId] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message || "Failed to reject match.", variant: "destructive" }),
   });
@@ -329,7 +403,7 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
                         <span>Status: <Badge variant={match.status === 'approved' ? 'default' : 'outline'} className={`capitalize text-xs px-1.5 py-0.5 ${match.status === 'approved' ? 'bg-green-100 text-green-700' : ''}`}>{match.status.replace('_', ' ')}</Badge></span>
                         {typeof match.match_score === 'number' && (
                             <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5">
-                                Match Score: {Math.round(match.match_score * 100)}%
+                                PGL Match Score: {Math.round(match.match_score)}/100
                             </Badge>
                         )}
                     </div>
@@ -338,10 +412,10 @@ function PodcastMatchesTab({ campaignId, userRole }: { campaignId: string; userR
                     {match.media_website && <Button variant="ghost" size="icon" asChild className="h-8 w-8"><a href={match.media_website} target="_blank" rel="noopener noreferrer" title="Visit Website"><ExternalLink className="h-4 w-4"/></a></Button>}
                     {userRole === 'client' && match.status === 'pending' && (
                       <>
-                        <Button size="sm" onClick={() => approveMatchMutation.mutate(match.match_id)} disabled={approveMatchMutation.isPending} className="bg-green-500 hover:bg-green-600 text-white">
+                        <Button size="sm" onClick={() => approveMatchMutation.mutate({ reviewTaskId: match.review_task_id || null, matchId: match.match_id })} disabled={approveMatchMutation.isPending} className="bg-green-500 hover:bg-green-600 text-white">
                             <ThumbsUp className="h-4 w-4 mr-1"/> Approve
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => rejectMatchMutation.mutate(match.match_id)} disabled={rejectMatchMutation.isPending}>
+                        <Button size="sm" variant="outline" onClick={() => rejectMatchMutation.mutate({ reviewTaskId: match.review_task_id || null, matchId: match.match_id })} disabled={rejectMatchMutation.isPending}>
                             <ThumbsDown className="h-4 w-4 mr-1"/> Reject
                         </Button>
                       </>
@@ -500,6 +574,20 @@ export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps)
     enabled: !!campaignId && !authLoading && !!user,
   });
 
+  const { data: campaignStats, isLoading: isLoadingStats } = useQuery<CampaignStats>({
+      queryKey: ["dashboardStats", campaignId],
+      queryFn: async () => {
+          if (!campaignId) return null;
+          const response = await apiRequest("GET", `/dashboard/stats?campaign_id=${campaignId}`);
+          if (!response.ok) {
+              console.warn("Failed to fetch campaign-specific stats.");
+              return null;
+          }
+          return response.json();
+      },
+      enabled: !!campaignId,
+  });
+
   const reprocessCampaignMutation = useMutation({
     mutationFn: async () => {
       if (!campaignId) throw new Error("Campaign ID is missing.");
@@ -608,7 +696,7 @@ export default function CampaignDetail({ campaignIdParam }: CampaignDetailProps)
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-          <CampaignOverviewTab campaign={campaign} onReprocess={() => reprocessCampaignMutation.mutate()} />
+          <CampaignOverviewTab campaign={campaign} onReprocess={() => reprocessCampaignMutation.mutate()} stats={campaignStats} />
         </TabsContent>
         <TabsContent value="profileContent" className="mt-6">
           <ProfileContentTab campaign={campaign} userRole={user?.role || null} />

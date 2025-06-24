@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient as useTanstackQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod"; // Import Zod
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -17,21 +17,14 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
+import { ImageUpload } from "@/components/ImageUpload";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Settings as SettingsIcon, User, Bell, Shield, Download, Save, Trash2, AlertTriangle,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Commented out problematic import
-// import { 
-//   userProfileUpdateSchema, UserProfileUpdateFormData,
-//   notificationSettingsSchema, NotificationSettingsFormData,
-//   privacySettingsSchema, PrivacySettingsFormData,
-//   accountDeletionRequestSchema, AccountDeletionRequestFormData,
-//   AuthUser 
-// } from "./SettingsSchemas"; 
-
-// --- Placeholder Schemas and Types (define properly later or in SettingsSchemas.ts) ---
+// --- Placeholder Schemas and Types ---
 
 // User Profile
 const userProfileUpdateSchema = z.object({
@@ -74,7 +67,6 @@ type AccountDeletionRequestFormData = z.infer<typeof accountDeletionRequestSchem
 
 // --- End Placeholder Schemas ---
 
-
 interface TimezoneOption {
   value: string;
   label: string;
@@ -87,14 +79,18 @@ const timezones: TimezoneOption[] = [
   { value: 'America/Los_Angeles', label: '(GMT-08:00) Pacific Time (US & Canada)' },
   { value: 'Europe/London', label: '(GMT+00:00) London' },
   { value: 'Europe/Berlin', label: '(GMT+01:00) Berlin, Amsterdam, Paris' },
-  // Add more timezones as needed
 ];
 
 function ProfileSettings() {
-  const { user, isLoading: authLoading } = useAuth(); // useAuth provides the current user
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  
+  // Debug logging for user data
+  console.log('👤 Current user data in Settings:', user);
+  console.log('🖼️ Profile image URL:', user?.profile_image_url);
   const tanstackQueryClient = useTanstackQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
   const form = useForm<UserProfileUpdateFormData>({
     resolver: zodResolver(userProfileUpdateSchema),
@@ -105,7 +101,6 @@ function ProfileSettings() {
     if (user) {
       form.reset({
         full_name: user.full_name || "",
-        // email: user.username, // Email is typically not editable by user directly or needs verification
         bio: user.bio || "",
         website: user.website || "",
         location: user.location || "",
@@ -114,14 +109,13 @@ function ProfileSettings() {
         twitter_profile_url: user.twitter_profile_url || "",
         instagram_profile_url: user.instagram_profile_url || "",
         tiktok_profile_url: user.tiktok_profile_url || "",
-        dashboard_username: user.dashboard_username || user.username, // Default to email if not set
+        dashboard_username: user.dashboard_username || user.username,
       });
     }
-  }, [user, form, isEditing]); // Re-populate form if user data changes or edit mode toggles
+  }, [user, form, isEditing]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: UserProfileUpdateFormData) => {
-      // Filter out empty strings for optional fields to send them as null or not at all
       const payload = Object.fromEntries(
         Object.entries(data).filter(([, value]) => value !== "" && value !== undefined)
       );
@@ -156,76 +150,105 @@ function ProfileSettings() {
   if (!user) return <p>Please log in to view your profile settings.</p>;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5" />Profile Information</CardTitle>
-        <CardDescription>Update your personal details and preferences.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex items-center space-x-4">
-          <Avatar className="h-20 w-20">
-            {/* <AvatarImage src={user.profileImageUrl} alt={user.full_name || user.username} /> */}
-            <AvatarFallback className="bg-gray-300 text-gray-700 text-lg">
-              {getInitials(user.full_name)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">{user.full_name || user.username}</h3>
-            <p className="text-sm text-gray-600">{user.username}</p> {/* Email is username */}
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5" />Profile Information</CardTitle>
+          <CardDescription>Update your personal details and preferences.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center space-x-4">
+            <Avatar className="h-20 w-20">
+              <AvatarImage 
+                src={user.profile_image_url ? `${user.profile_image_url}?t=${Date.now()}` : undefined} 
+                alt={user.full_name || user.username} 
+              />
+              <AvatarFallback className="bg-gray-300 text-gray-700 text-lg">
+                {getInitials(user.full_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">{user.full_name || user.username}</h3>
+              <p className="text-sm text-gray-600">{user.username}</p>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => setIsUploadDialogOpen(true)}>
+                Change Photo
+              </Button>
+            </div>
           </div>
-        </div>
-        <Separator />
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="full_name" render={({ field }) => (
-              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} disabled={!isEditing} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-             <FormField control={form.control} name="dashboard_username" render={({ field }) => (
-              <FormItem><FormLabel>Dashboard Username</FormLabel><FormControl><Input {...field} disabled={!isEditing} value={field.value ?? ""} /></FormControl><FormDescription>This is how you log in. Can be different from your email.</FormDescription><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="bio" render={({ field }) => (
-              <FormItem><FormLabel>Bio</FormLabel><FormControl><Textarea placeholder="Tell us about yourself..." className="min-h-[100px]" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="website" render={({ field }) => (
-                <FormItem><FormLabel>Website</FormLabel><FormControl><Input placeholder="https://yourwebsite.com" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+          <Separator />
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField control={form.control} name="full_name" render={({ field }) => (
+                <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} disabled={!isEditing} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="location" render={({ field }) => (
-                <FormItem><FormLabel>Location</FormLabel><FormControl><Input placeholder="City, Country" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+               <FormField control={form.control} name="dashboard_username" render={({ field }) => (
+                <FormItem><FormLabel>Dashboard Username</FormLabel><FormControl><Input {...field} disabled={!isEditing} value={field.value ?? ""} /></FormControl><FormDescription>This is how you log in. Can be different from your email.</FormDescription><FormMessage /></FormItem>
               )} />
-            </div>
-            <FormField control={form.control} name="timezone" render={({ field }) => (
-              <FormItem><FormLabel>Timezone</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value ?? undefined} disabled={!isEditing}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select your timezone" /></SelectTrigger></FormControl>
-                  <SelectContent>{timezones.map((tz) => (<SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>))}</SelectContent>
-                </Select><FormMessage />
-              </FormItem>
-            )} />
-             <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
-                <FormItem><FormLabel>LinkedIn URL</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/..." disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="twitter_profile_url" render={({ field }) => (
-                <FormItem><FormLabel>Twitter/X URL</FormLabel><FormControl><Input placeholder="https://x.com/..." disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-            )} />
-            {/* Add Instagram and TikTok if desired */}
+              <FormField control={form.control} name="bio" render={({ field }) => (
+                <FormItem><FormLabel>Bio</FormLabel><FormControl><Textarea placeholder="Tell us about yourself..." className="min-h-[100px]" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="website" render={({ field }) => (
+                  <FormItem><FormLabel>Website</FormLabel><FormControl><Input placeholder="https://yourwebsite.com" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="location" render={({ field }) => (
+                  <FormItem><FormLabel>Location</FormLabel><FormControl><Input placeholder="City, Country" disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="timezone" render={({ field }) => (
+                <FormItem><FormLabel>Timezone</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined} disabled={!isEditing}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select your timezone" /></SelectTrigger></FormControl>
+                    <SelectContent>{timezones.map((tz) => (<SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>))}</SelectContent>
+                  </Select><FormMessage />
+                </FormItem>
+              )} />
+               <FormField control={form.control} name="linkedin_profile_url" render={({ field }) => (
+                  <FormItem><FormLabel>LinkedIn URL</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/..." disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="twitter_profile_url" render={({ field }) => (
+                  <FormItem><FormLabel>Twitter/X URL</FormLabel><FormControl><Input placeholder="https://x.com/..." disabled={!isEditing} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+              )} />
+              {/* Add Instagram and TikTok if desired */}
 
-            <div className="flex justify-end space-x-4 pt-4">
-              {isEditing ? (
-                <>
-                  <Button type="button" variant="outline" onClick={() => { setIsEditing(false); form.reset(user ? { ...user, full_name: user.full_name || "", dashboard_username: user.dashboard_username || user.username } : {}); }}>Cancel</Button>
-                  <Button type="submit" disabled={updateProfileMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                    {updateProfileMutation.isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
-                  </Button>
-                </>
-              ) : (
-                <Button type="button" onClick={() => setIsEditing(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">Edit Profile</Button>
-              )}
+              <div className="flex justify-end space-x-4 pt-4">
+                {isEditing ? (
+                  <>
+                    <Button type="button" variant="outline" onClick={() => { setIsEditing(false); form.reset(user ? { ...user, full_name: user.full_name || "", dashboard_username: user.dashboard_username || user.username } : {}); }}>Cancel</Button>
+                    <Button type="submit" disabled={updateProfileMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                      {updateProfileMutation.isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={() => setIsEditing(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">Edit Profile</Button>
+                )}
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Upload New Profile Picture</DialogTitle>
+                <DialogDescription>
+                    Choose a new photo to represent you on the dashboard.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="pt-4">
+                <ImageUpload 
+                    uploadContext="profile_picture"
+                    currentImageUrl={user.profile_image_url ?? undefined}
+                    onUploadComplete={() => {
+                        // Invalidation is handled by the component's mutation, just close the dialog
+                        setIsUploadDialogOpen(false);
+                    }}
+                />
             </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

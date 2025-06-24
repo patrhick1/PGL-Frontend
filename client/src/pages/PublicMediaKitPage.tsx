@@ -20,31 +20,96 @@ import { Link as RouterLink } from "wouter"; // Added for CTA button
 
 // Interface for the data expected from GET /public/media-kit/{slug}
 interface PublicMediaKitData {
+  media_kit_id: string;
   campaign_id: string;
   person_id: number;
-  is_prospect_kit?: boolean;
-  title?: string | null;
+  client_role?: string | null; // e.g., "client", "prospect"
+  title?: string | null; // Main title of the media kit
   slug?: string | null;
   is_public?: boolean | null;
-  theme_preference?: string | null;
-  headline?: string | null;
-  introduction?: string | null;
-  full_bio_content?: string | null;
-  summary_bio_content?: string | null;
-  short_bio_content?: string | null;
-  talking_points?: Array<{ topic: string; outcome?: string; description: string }> | null;
-  key_achievements?: Array<{ value: string }> | null;
-  previous_appearances?: Array<{ podcast_name: string; episode_title?: string; link?: string }> | null;
-  social_media_stats?: Record<string, { followers?: number; url?: string; handle?: string }> | null;
-  headshot_image_urls?: Array<{ url: string }> | null;
-  logo_image_url?: string | null;
-  call_to_action_text?: string | null;
-  contact_information_for_booking?: string | null;
+  theme_preference?: string | null; // e.g., "modern", "classic"
+  
+  tagline?: string | null; // Short tagline under the name in header
+  headline?: string | null; // Larger headline text
+  introduction?: string | null; // Introduction text, might be used if full_bio is not detailed
+  
+  full_bio_content?: string | null; // Can be markdown/HTML
+  summary_bio_content?: string | null; // Shorter bio
+  short_bio_content?: string | null; // Very short bio, possibly for social media
+  bio_source?: 'gdoc' | 'llm_generated' | 'manual' | string | null;
+
+  talking_points?: Array<{
+    title: string; // Changed from 'topic'
+    description?: string;
+    outcome?: string; // Kept for potential future use
+  }> | null;
+  
+  sample_questions?: string[] | null; // Array of question strings
+
+  key_achievements?: string[] | null; // Array of achievement strings
+
+  previous_appearances?: Array<{
+    url?: string | null;
+    date?: string | null;
+    type?: 'previous_appearance' | 'speaking_clip' | string | null; // e.g., podcast, webinar, conference talk
+    title?: string | null; // e.g., "The Student Success Podcast"
+    outlet?: string | null; // Name of the podcast, show, or event series
+    description?: string | null; // Optional: Episode title or talk summary
+  }> | null;
+
+  social_media_stats?: {
+    last_fetched_at?: string | null;
+    linkedin_followers_count?: number | null;
+    twitter_followers_count?: number | null;
+    // Add other platforms as needed
+    // Example structure from provided data:
+    // [platform_name]?: { followers?: number; url?: string; handle?: string };
+  } | null;
+  
+  testimonials_section?: string | null; // Can be markdown/HTML for a full section
+
+  headshot_image_urls?: Array<{ url: string; alt_text?: string }> | null; // url is primary (legacy)
+  headshot_image_url?: string | null; // New single URL format
+  logo_image_url?: string | null; // Could be client's company or personal logo
+
+  call_to_action_text?: string | null; // Custom text for the main CTA button
+  contact_information_for_booking?: string | null; // JSON string with contact details
+  
+  // Client-specific information (often from the Person model)
   client_full_name?: string | null;
   client_email?: string | null;
   client_website?: string | null;
   client_linkedin_profile_url?: string | null;
   client_twitter_profile_url?: string | null;
+  client_instagram_profile_url?: string | null;
+  client_tiktok_profile_url?: string | null;
+  
+  // New fields from the provided JSON
+  custom_sections?: Array<{
+    title: string;
+    content: any; // Can be an object or array depending on the section
+  }> | null;
+  
+  person_social_links?: Array<{  // <-- ADDED THIS FIELD
+    platform: string; 
+    handle?: string | null;
+    url?: string | null;
+  }> | null;
+  
+  keywords?: string[] | null;
+  angles_source?: string | null;
+  created_at: string;
+  updated_at: string;
+  campaign_name?: string | null;
+
+  // Simplified at_a_glance specific structure if preferred over custom_sections
+  // This is an alternative to parsing custom_sections if "At a Glance Stats" is always present and structured
+  at_a_glance_stats_custom?: {
+    keynoteEngagements?: string | null;
+    yearsOfExperience?: string | null;
+    emailSubscribers?: string | null;
+    // Add any other common "at a glance" stats
+  } | null;
 }
 
 const getInitials = (name?: string | null) => {
@@ -52,6 +117,41 @@ const getInitials = (name?: string | null) => {
   const parts = name.split(" ");
   if (parts.length > 1) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   return name[0].toUpperCase();
+};
+
+// Helper function to convert markdown-style bold to HTML strong tags
+const formatMarkdownBold = (text?: string | null): string => {
+  if (!text) return "";
+  // Handle **bold**
+  let formattedText = text.replace(/\\*\\*(.*?)\\*\\*/g, "<strong>$1</strong>");
+  // Handle *italic* (if needed, though the example focuses on bold)
+  // formattedText = formattedText.replace(/\\*(.*?)\\*/g, "<em>$1</em>");
+  return formattedText;
+};
+
+// Helper function to extract the main bio from full_bio_content
+const getMainBio = (fullBio?: string | null): string => {
+  if (!fullBio) return "";
+  // Assuming the main bio is the part before "**Summary Bio:**" or "**Short Bio:**"
+  // Or, if these markers are not present, use the whole content.
+  const summaryMarker = "\\n\\n**Summary Bio:**";
+  const shortMarker = "\\n\\n**Short Bio:**";
+  
+  let mainBio = fullBio;
+  const summaryIndex = fullBio.indexOf(summaryMarker);
+  const shortIndex = fullBio.indexOf(shortMarker);
+
+  if (summaryIndex !== -1) {
+    mainBio = fullBio.substring(0, summaryIndex);
+  } else if (shortIndex !== -1) {
+    mainBio = fullBio.substring(0, shortIndex);
+  }
+  
+  // Remove the "**Full Bio:**" prefix if present
+  if (mainBio.startsWith("**Full Bio:**")) {
+    mainBio = mainBio.substring("**Full Bio:**".length).trim();
+  }
+  return formatMarkdownBold(mainBio);
 };
 
 export default function PublicMediaKitPage() {
@@ -83,7 +183,7 @@ export default function PublicMediaKitPage() {
   useEffect(() => {
     if (mediaKit?.title) {
       document.title = `${mediaKit.title} | Podcast Guest Media Kit`;
-    } else if (slug && !isLoading && !isError) { // Added !isError
+    } else if (slug && !isLoading && !isError) {
         document.title = `Media Kit | ${slug}`;
     } else if (isError) {
         document.title = "Media Kit Not Found";
@@ -93,23 +193,14 @@ export default function PublicMediaKitPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 p-4 md:p-8 animate-pulse">
-        <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-lg p-6 md:p-10">
-          <Skeleton className="h-12 w-3/4 mx-auto mb-4" />
-          <Skeleton className="h-8 w-1/2 mx-auto mb-8" />
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
-            <div className="md:col-span-1 space-y-6">
-              <Skeleton className="h-40 w-40 rounded-full mx-auto" />
-              <Skeleton className="h-6 w-3/4 mx-auto" />
-              <Skeleton className="h-4 w-full mx-auto" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="md:col-span-2 space-y-4">
-              <Skeleton className="h-8 w-1/3" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-8 w-1/3 mt-6" />
-              <Skeleton className="h-32 w-full" />
-            </div>
+        <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-lg p-6 md:p-10">
+          <Skeleton className="h-60 w-full" />
+          <div className="pt-10 grid md:grid-cols-2 gap-8">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
           </div>
+          <Skeleton className="h-20 w-full mt-8" />
+          <Skeleton className="h-32 w-full mt-8" />
         </div>
       </div>
     );
@@ -119,168 +210,325 @@ export default function PublicMediaKitPage() {
     return <NotFound />;
   }
 
-  const primaryHeadshot = mediaKit.headshot_image_urls?.[0]?.url;
+  // Handle multiple possible headshot URL structures
+  const primaryHeadshot = (mediaKit as any).headshot_image_url || // New backend format
+                          mediaKit.headshot_image_urls?.[0]?.url || // Array format
+                          (mediaKit as any).image_urls?.headshot_url; // Object format
+  
+  // Debug logging to check what image data we're getting
+  console.log('🖼️ Media Kit Image Debug:', {
+    headshot_image_url: (mediaKit as any).headshot_image_url,
+    headshot_image_urls: mediaKit.headshot_image_urls,
+    image_urls: (mediaKit as any).image_urls,
+    primaryHeadshot,
+    logo_image_url: mediaKit.logo_image_url
+  });
+  // Use tagline from mediaKit if available, otherwise fallback to a generic or empty string
+  const tagline = mediaKit.tagline || mediaKit.headline || "Podcast Guest"; // Fallback for tagline
+
+  // Extracting At-a-Glance stats from custom_sections
+  const atAGlanceSection = mediaKit.custom_sections?.find(section => section.title === "At a Glance Stats");
+  const atAGlanceStats = atAGlanceSection?.content as PublicMediaKitData['at_a_glance_stats_custom'] | undefined;
+
+  // Parsing contact_information_for_booking
+  let bookingInfo: { booking_email?: string; website?: string; phone?: string; preferred_contact_for_hosts?: string; } = {};
+  if (mediaKit.contact_information_for_booking) {
+    try {
+      bookingInfo = JSON.parse(mediaKit.contact_information_for_booking);
+    } catch (e) {
+      console.error("Failed to parse contact_information_for_booking:", e);
+      // Fallback or default behavior if parsing fails
+      if (typeof mediaKit.contact_information_for_booking === 'string' && mediaKit.contact_information_for_booking.startsWith('mailto:')) {
+        bookingInfo.booking_email = mediaKit.contact_information_for_booking.substring('mailto:'.length);
+      } else if (typeof mediaKit.contact_information_for_booking === 'string' && mediaKit.contact_information_for_booking.startsWith('http')) {
+        bookingInfo.website = mediaKit.contact_information_for_booking;
+      }
+    }
+  }
+  
+  const mainBioHtml = getMainBio(mediaKit.full_bio_content);
+
+  const socialLinks = mediaKit.person_social_links?.map(link => {
+    let IconComponent;
+    const platformLower = link.platform.toLowerCase();
+    
+    if (platformLower.includes('linkedin')) IconComponent = Linkedin;
+    else if (platformLower.includes('twitter') || platformLower.includes('x.com')) IconComponent = Twitter;
+    else if (platformLower.includes('instagram')) IconComponent = Instagram;
+    else if (platformLower.includes('facebook')) IconComponent = Facebook;
+    else if (platformLower.includes('youtube')) IconComponent = Youtube;
+    // Add more platform checks and icons as needed
+
+    const targetUrl = link.url || link.handle;
+
+    if (IconComponent && targetUrl) {
+      return {
+        platform: link.platform,
+        url: targetUrl,
+        Icon: IconComponent,
+      };
+    }
+    return null;
+  }).filter(Boolean) as Array<{ platform: string; url: string; Icon: React.ElementType }> || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <main className="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl overflow-hidden">
-        <header className="p-8 md:p-12 bg-primary text-primary-foreground text-center">
-          {mediaKit.logo_image_url && (
-            <img src={mediaKit.logo_image_url} alt={`${mediaKit.client_full_name || 'Client'} Logo`} className="h-16 mx-auto mb-4 rounded" />
-          )}
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">{mediaKit.title || mediaKit.client_full_name || "Media Kit"}</h1>
-          {mediaKit.headline && <p className="text-lg md:text-xl text-primary-foreground/80">{mediaKit.headline}</p>}
-        </header>
-
-        <div className="p-6 md:p-10 grid md:grid-cols-3 gap-8">
-          <aside className="md:col-span-1 space-y-6">
+    <div className="min-h-screen bg-slate-200 font-sans">
+      <header 
+        className="relative bg-slate-800 text-white py-16 md:py-24 bg-cover bg-center shadow-xl"
+        style={{ backgroundImage: mediaKit.theme_preference === 'dark_banner_only' ? 'none' : "url('https://images.unsplash.com/photo-1507646871303-366937386fba?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')" }}
+      >
+        {mediaKit.theme_preference !== 'dark_banner_only' && <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"></div>}
+        
+        <div className="relative max-w-6xl mx-auto px-6 lg:px-8 flex flex-col md:flex-row items-center text-center md:text-left gap-8 md:gap-10">
+          <div className="flex-shrink-0">
             {primaryHeadshot ? (
-              <img src={primaryHeadshot} alt={mediaKit.client_full_name || "Headshot"} className="rounded-full w-40 h-40 md:w-48 md:h-48 object-cover mx-auto shadow-lg border-4 border-white" />
+              <img 
+                src={primaryHeadshot} 
+                alt={mediaKit.client_full_name || "Headshot"} 
+                className="w-40 h-40 md:w-52 md:h-52 rounded-full object-cover border-4 border-slate-300 shadow-2xl transform hover:scale-105 transition-transform duration-300"
+              />
             ) : (
-              <Avatar className="h-40 w-40 md:h-48 md:w-48 text-5xl mx-auto shadow-lg border-4 border-white">
-                <AvatarFallback>{getInitials(mediaKit.client_full_name)}</AvatarFallback>
+              <Avatar className="w-40 h-40 md:w-52 md:h-52 border-4 border-slate-300 shadow-2xl">
+                <AvatarFallback className="bg-slate-600 text-white text-4xl md:text-6xl font-bold">
+                  {getInitials(mediaKit.client_full_name)}
+                </AvatarFallback>
               </Avatar>
             )}
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-800">{mediaKit.client_full_name || "Guest Speaker"}</h2>
-            </div>
-
-            {mediaKit.social_media_stats && Object.keys(mediaKit.social_media_stats).length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 pt-4">
-                    <CardTitle className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Social Presence</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 pb-4">
-                  {Object.entries(mediaKit.social_media_stats).map(([platform, stats]) => stats.url && (
-                    <a key={platform} href={stats.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-gray-700 hover:text-primary transition-colors group">
-                      {platform === 'twitter' && <Twitter className="h-4 w-4 mr-2 text-sky-500 group-hover:text-sky-600" />}
-                      {platform === 'linkedin' && <Linkedin className="h-4 w-4 mr-2 text-blue-600 group-hover:text-blue-700" />}
-                      {platform === 'instagram' && <Instagram className="h-4 w-4 mr-2 text-pink-500 group-hover:text-pink-600" />}
-                      {platform === 'facebook' && <Facebook className="h-4 w-4 mr-2 text-blue-700 group-hover:text-blue-800" />}
-                      {platform === 'youtube' && <Youtube className="h-4 w-4 mr-2 text-red-600 group-hover:text-red-700" />}
-                      <span className="capitalize">{platform}</span>
-                      {stats.followers != null && <span className="ml-auto text-xs text-gray-500">{stats.followers.toLocaleString()} followers</span>}
-                    </a>
-                  ))}
-                </CardContent>
-              </Card>
+          </div>
+          <div className="flex-grow">
+            {mediaKit.client_full_name && (
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white filter drop-shadow-lg">
+                {mediaKit.client_full_name}
+              </h1>
             )}
-
-            {mediaKit.contact_information_for_booking && (
-                 <Card>
-                    <CardHeader className="pb-2 pt-4">
-                        <CardTitle className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Book This Guest</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pb-4">
-                        <p className="text-sm text-gray-700">{mediaKit.contact_information_for_booking}</p>
-                        {mediaKit.client_email && <p className="text-sm text-gray-700 mt-1"><Mail className="inline h-4 w-4 mr-1 text-gray-500"/> {mediaKit.client_email}</p>}
-                    </CardContent>
-                </Card>
+            {tagline && (
+              <p className="mt-3 text-xl sm:text-2xl text-slate-200 filter drop-shadow-md" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(tagline) }} />
             )}
-          </aside>
-
-          <div className="md:col-span-2 space-y-8">
-            {mediaKit.introduction && (
-              <section>
-                <p className="text-lg text-gray-700 leading-relaxed">{mediaKit.introduction}</p>
-              </section>
-            )}
-
-            {mediaKit.full_bio_content && (
-              <section>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3 flex items-center"><User className="h-5 w-5 mr-2 text-primary"/>About {mediaKit.client_full_name || "the Guest"}</h3>
-                <div className="prose prose-sm max-w-none text-gray-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: mediaKit.full_bio_content.replace(/\n/g, '<br />') }} />
-              </section>
-            )}
-
-            {mediaKit.talking_points && mediaKit.talking_points.length > 0 && (
-              <section>
-                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Mic className="h-5 w-5 mr-2 text-primary"/>Potential Talking Points</h3>
-                <div className="space-y-4">
-                  {mediaKit.talking_points.map((point, index) => (
-                    <div key={index} className="p-4 border border-gray-200 rounded-lg bg-slate-50/70 shadow-sm">
-                      <h4 className="font-semibold text-gray-700">{point.topic}</h4>
-                      {point.outcome && <p className="text-xs text-primary mt-0.5">Outcome: {point.outcome}</p>}
-                      <p className="text-sm text-gray-600 mt-1 leading-normal">{point.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {mediaKit.key_achievements && mediaKit.key_achievements.length > 0 && (
-              <section>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3 flex items-center"><Star className="h-5 w-5 mr-2 text-primary"/>Key Achievements</h3>
-                <ul className="list-none space-y-1 text-gray-600 pl-0">
-                  {mediaKit.key_achievements.map((ach, index) => (
-                    <li key={index} className="text-sm flex items-start">
-                        <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-green-500 flex-shrink-0"/>
-                        <span>{ach.value}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {mediaKit.previous_appearances && mediaKit.previous_appearances.length > 0 && (
-              <section>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3 flex items-center"><ListChecks className="h-5 w-5 mr-2 text-primary"/>Previous Appearances</h3>
-                <div className="space-y-3">
-                  {mediaKit.previous_appearances.map((app, index) => (
-                    <div key={index} className="text-sm p-3 border rounded-md bg-gray-50/50">
-                      <span className="font-medium text-gray-700 block">{app.podcast_name}</span>
-                      {app.episode_title && <span className="text-gray-600 block text-xs italic">"{app.episode_title}"</span>}
-                      {app.link && <a href={app.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs inline-flex items-center mt-1">Listen <ExternalLink className="inline h-3 w-3 ml-1"/></a>}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {mediaKit.call_to_action_text && (
-              <section className="mt-10 text-center p-6 bg-primary/10 rounded-lg">
-                <h3 className="text-xl font-semibold text-primary mb-3">{mediaKit.call_to_action_text}</h3>
-                {mediaKit.contact_information_for_booking && !mediaKit.contact_information_for_booking.startsWith("http") &&
-                    <p className="text-gray-700">{mediaKit.contact_information_for_booking}</p>
-                }
-                {mediaKit.contact_information_for_booking && mediaKit.contact_information_for_booking.startsWith("http") &&
-                    <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
-                        <a href={mediaKit.contact_information_for_booking} target="_blank" rel="noopener noreferrer">
-                            Book Now <ArrowRight className="ml-2 h-4 w-4"/>
-                        </a>
-                    </Button>
-                }
-              </section>
+            {socialLinks.length > 0 && (
+              <div className="mt-6 flex justify-center md:justify-start space-x-5">
+                {socialLinks.map(({Icon, url, platform}) => (
+                  <a 
+                    key={platform} 
+                    href={url!} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-slate-300 hover:text-white transform hover:scale-110 transition-transform duration-200"
+                    aria-label={`Link to ${platform}`}
+                  >
+                    <Icon className="h-7 w-7" />
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         </div>
+      </header>
 
-        {/* --- CTA for Prospect Kits --- */}
-        {mediaKit.person_id && mediaKit.campaign_id && (
-          <section className="px-6 md:px-10 py-8 bg-gradient-to-r from-primary to-blue-600 text-white text-center">
-            <Sparkles className="h-10 w-10 mx-auto mb-4 text-yellow-300" />
-            <h2 className="text-2xl font-bold mb-3">Unlock Your Full Potential!</h2>
-            <p className="mb-6 max-w-2xl mx-auto text-base">
-              This is a preview of your Media Kit! Sign up now to save your progress, unlock full editing, add GDoc content, get social stats, and supercharge your podcast outreach.
-            </p>
-            <RouterLink href={`/signup?prospect_person_id=${mediaKit.person_id}&prospect_campaign_id=${mediaKit.campaign_id}`}>
-              <Button size="lg" variant="secondary" className="bg-yellow-400 hover:bg-yellow-500 text-slate-800 font-semibold text-lg px-8 py-3 shadow-lg transition-transform hover:scale-105">
-                Sign Up & Activate Full Features <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </RouterLink>
-          </section>
-        )}
-
-        <footer className="text-center py-6 border-t border-gray-200 mt-0">
-          {/* mt-0 because the CTA section above it will provide spacing */}
-          <p className="text-xs text-gray-500">Media Kit powered by PGL System</p>
-          {mediaKit.client_website && (
-            <p className="text-xs text-gray-500 mt-1">
-              Visit <a href={mediaKit.client_website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{mediaKit.client_full_name || "Client"}'s Website</a>
-            </p>
+      <main className="max-w-5xl mx-auto py-10 md:py-16 px-4 sm:px-6 lg:px-8 bg-white -mt-12 md:-mt-20 rounded-t-xl shadow-2xl">
+        <div className="space-y-12 md:space-y-16 p-4 md:p-6">
+          {mainBioHtml && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-5 tracking-tight">About {mediaKit.client_full_name && mediaKit.client_full_name.split(' ')[0]}</h2>
+              <div 
+                className="prose prose-lg prose-slate max-w-none text-slate-700 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: mainBioHtml.replace(/\\n/g, '<br />') }} 
+              />
+            </section>
           )}
-        </footer>
+
+          {(atAGlanceStats || (mediaKit.key_achievements && mediaKit.key_achievements.length > 0)) && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight text-center">At-a-Glance</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {atAGlanceStats?.keynoteEngagements && (
+                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
+                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.keynoteEngagements}</p>
+                    <p className="text-md text-slate-600 mt-2">Keynote Engagements</p>
+                  </div>
+                )}
+                {atAGlanceStats?.yearsOfExperience && (
+                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
+                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.yearsOfExperience}</p>
+                    <p className="text-md text-slate-600 mt-2">Years of Experience</p>
+                  </div>
+                )}
+                {atAGlanceStats?.emailSubscribers && (
+                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
+                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.emailSubscribers}</p>
+                    <p className="text-md text-slate-600 mt-2">Email Subscribers</p>
+                  </div>
+                )}
+              </div>
+              {mediaKit.key_achievements && mediaKit.key_achievements.length > 0 && (
+                 <div className="mt-8 bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
+                   <h3 className="text-2xl font-semibold text-slate-700 mb-3 text-center">Key Achievements</h3>
+                   <ul className="list-disc list-inside text-slate-600 space-y-2 marker:text-primary">
+                      {mediaKit.key_achievements.map((achievement, index) => (
+                          <li key={index} className="ml-2">{achievement}</li>
+                      ))}
+                   </ul>
+                 </div>
+              )}
+            </section>
+          )}
+          
+          {/* Social Media Stats Section */}
+          {(mediaKit.social_media_stats?.linkedin_followers_count || mediaKit.social_media_stats?.twitter_followers_count) && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight">Social Snapshot</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                {mediaKit.social_media_stats?.linkedin_followers_count && (
+                  <Card className="bg-slate-50 hover:bg-slate-100 p-5 rounded-xl shadow-lg border border-slate-200 transition-all duration-300 flex items-center space-x-4">
+                    <Linkedin className="h-10 w-10 text-primary flex-shrink-0" />
+                    <div>
+                      <p className="text-3xl font-extrabold text-slate-700">
+                        {mediaKit.social_media_stats.linkedin_followers_count.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-slate-500">LinkedIn Followers</p>
+                    </div>
+                  </Card>
+                )}
+                {mediaKit.social_media_stats?.twitter_followers_count && (
+                  <Card className="bg-slate-50 hover:bg-slate-100 p-5 rounded-xl shadow-lg border border-slate-200 transition-all duration-300 flex items-center space-x-4">
+                    <Twitter className="h-10 w-10 text-sky-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-3xl font-extrabold text-slate-700">
+                        {mediaKit.social_media_stats.twitter_followers_count.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-slate-500">Twitter Followers</p>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            </section>
+          )}
+          
+          {mediaKit.previous_appearances && mediaKit.previous_appearances.length > 0 && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight">Previous Appearances</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {mediaKit.previous_appearances.map((app, index) => (
+                  <Card key={index} className="hover:shadow-xl transition-shadow duration-300 border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-xl text-slate-700">{app.title || app.outlet || "Appearance"}</CardTitle>
+                      {app.outlet && app.title !== app.outlet && <CardDescription className="text-sm text-slate-500">{app.outlet}</CardDescription>}
+                    </CardHeader>
+                    <CardContent>
+                      {app.description && <p className="text-sm text-slate-600 mb-3">{app.description}</p>}
+                      {app.url && (
+                        <Button variant="outline" asChild className="text-primary border-primary hover:bg-primary/10 hover:text-primary">
+                          <a href={app.url} target="_blank" rel="noopener noreferrer">
+                            {app.type === 'speaking_clip' ? "Watch Clip" : "Listen/View"} <ExternalLink className="ml-2 h-4 w-4"/>
+                          </a>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {mediaKit.talking_points && mediaKit.talking_points.length > 0 && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight">Talking Points</h2>
+              <div className="space-y-4">
+                {mediaKit.talking_points.map((point, index) => (
+                  <Card key={index} className="bg-slate-50 border-slate-200 shadow-md hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                        <CardTitle className="text-lg text-slate-700" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(point.title) }} />
+                    </CardHeader>
+                    {point.description && (
+                        <CardContent>
+                            <p className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(point.description) }} />
+                        </CardContent>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {mediaKit.sample_questions && mediaKit.sample_questions.length > 0 && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight flex items-center">
+                <Mic className="h-8 w-8 mr-3 text-primary"/>Sample Questions
+              </h2>
+              <div className="columns-1 md:columns-2 gap-x-8">
+                <ul className="list-none space-y-3 pl-0 text-slate-700">
+                  {mediaKit.sample_questions.map((question, index) => (
+                    <li key={index} className="mb-2 p-3 bg-slate-50 rounded-md border border-slate-200 flex items-start">
+                      <CheckCircle className="h-5 w-5 mr-3 text-primary flex-shrink-0 mt-1" />
+                      <span>{question}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+
+          {mediaKit.testimonials_section && (
+            <section className="py-4">
+              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight">Testimonials</h2>
+              <div 
+                className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 md:p-8 rounded-xl shadow-xl prose prose-lg prose-slate max-w-none leading-relaxed" 
+                dangerouslySetInnerHTML={{ __html: formatMarkdownBold(mediaKit.testimonials_section).replace(/\\n\\*\\s/g, '</ul><ul class="list-disc list-inside mt-2">').replace(/\\*\\s/g, '<li class="mb-1">') }}
+              />
+            </section>
+          )}
+          
+          {(bookingInfo.booking_email || bookingInfo.website || mediaKit.call_to_action_text) && (
+            <section className="text-center py-10 md:py-12 bg-slate-800 rounded-xl my-8 shadow-2xl">
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 px-4">
+                {mediaKit.call_to_action_text || `Interested in Booking ${mediaKit.client_full_name && mediaKit.client_full_name.split(' ')[0] || "This Guest"}?`}
+              </h2>
+              {bookingInfo.preferred_contact_for_hosts && (
+                <p className="text-slate-300 mb-8 max-w-lg mx-auto px-4">{bookingInfo.preferred_contact_for_hosts}</p>
+              )}
+              <Button 
+                size="lg" 
+                className="bg-white hover:bg-slate-200 text-slate-800 font-semibold px-12 py-4 text-lg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300"
+                asChild={!!(bookingInfo.website || bookingInfo.booking_email)}
+              >
+                {bookingInfo.website ? (
+                  <a href={bookingInfo.website.startsWith('http') ? bookingInfo.website : `https://${bookingInfo.website}`} target="_blank" rel="noopener noreferrer">
+                    Visit Website <ExternalLink className="ml-2 h-5 w-5"/>
+                  </a>
+                ) : bookingInfo.booking_email ? (
+                  <a href={`mailto:${bookingInfo.booking_email}?subject=Podcast Booking Inquiry for ${mediaKit.client_full_name || "Guest"}`}>
+                    Send Email <Mail className="ml-2 h-5 w-5"/>
+                  </a>
+                ) : (
+                  <span>{mediaKit.call_to_action_text || `Book ${mediaKit.client_full_name || "Guest"}`}</span>
+                )}
+              </Button>
+            </section>
+          )}
+
+          {mediaKit.client_role === 'prospect' && ( 
+            <section className="px-6 md:px-10 py-10 bg-primary/10 border-t-4 border-primary text-center mt-12 rounded-xl shadow-lg">
+              <Sparkles className="h-10 w-10 mx-auto mb-4 text-primary" />
+              <h2 className="text-2xl font-semibold mb-3 text-slate-800">Activate Your Full Media Kit</h2>
+              <p className="mb-6 max-w-xl mx-auto text-md text-slate-600">
+                This is a preview of your media kit. Sign up to save your progress, unlock full editing capabilities, add GDoc content, get automated social stats, and much more!
+              </p>
+              <RouterLink href={`/signup?prospect_person_id=${mediaKit.person_id}&prospect_campaign_id=${mediaKit.campaign_id}`}>
+                <Button size="default" variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-2.5 shadow-md transition-transform hover:scale-105">
+                  Sign Up & Unlock Features <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </RouterLink>
+            </section>
+          )}
+        </div>
       </main>
+
+      <footer className="bg-slate-900 text-slate-400 text-center py-10 mt-0 border-t border-slate-700">
+        <p className="text-sm">&copy; {new Date().getFullYear()} {mediaKit.client_full_name || "Your Name"}. All Rights Reserved.</p>
+        {mediaKit.logo_image_url && (
+            <img src={mediaKit.logo_image_url} alt={`${mediaKit.client_full_name || "Client"} Logo`} className="h-10 mx-auto my-4 opacity-80"/>
+        )}
+        <p className="text-xs mt-2">Media Kit powered by PGL System</p>
+      </footer>
     </div>
   );
 }

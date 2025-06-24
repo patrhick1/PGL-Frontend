@@ -9,11 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient"; // Use appQueryClient
 import { 
-  CheckCircle, Clock, XCircle, Search, Filter, Podcast, Users, ExternalLink, ThumbsUp, ThumbsDown, Edit3, Eye, MessageSquare
+  CheckCircle, Clock, XCircle, Search, Filter, Podcast, Users, ExternalLink, ThumbsUp, ThumbsDown, Edit3, Eye, MessageSquare,
+  ChevronLeft, ChevronRight, ListChecks // Added ListChecks for Total icon
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton"; // For loading states
+import { MatchIntelligenceCard } from "@/components/MatchIntelligenceCard";
+import { PitchReviewCard } from "@/components/PitchReviewCard";
 
 export interface ReviewTask {
   review_task_id: number;
@@ -26,15 +30,36 @@ export interface ReviewTask {
   created_at: string; // ISO datetime string
   completed_at?: string | null; // ISO datetime string
 
-  // --- Frontend populated fields for display ---
-  related_entity_name?: string; // e.g., Podcast Name or Pitch Title
+  // --- Enhanced endpoint fields ---
   campaign_name?: string;
-  client_name?: string;
-  media_url?: string; // e.g., podcast website
-  pitch_draft_preview?: string;
-  // --- Fields for Match Suggestion display ---
+  client_name?: string | null;
+  media_id?: number;
+  media_name?: string;
+  media_website?: string;
+  media_image_url?: string;
+  media_description?: string;
+  discovery_keyword?: string;
+  discovered_at?: string;
+  vetting_score?: number | null;
+  vetting_reasoning?: string | null;
+  vetting_criteria_met?: any | null;
   match_score?: number | null;
-  ai_reasoning?: string | null;
+  matched_keywords?: string[] | null;
+  best_matching_episode_id?: number | null;
+  recommendation?: string;
+  key_highlights?: string[];
+  potential_concerns?: string[];
+  host_names?: string[];
+  podcast_twitter_url?: string | null;
+  podcast_linkedin_url?: string | null;
+  podcast_instagram_url?: string | null;
+  podcast_facebook_url?: string | null;
+  podcast_youtube_url?: string | null;
+  podcast_tiktok_url?: string | null;
+  // Pitch review specific fields
+  pitch_body_full?: string;
+  pitch_subject_line?: string;
+  pitch_gen_id?: number;
 }
 
 // --- From podcast_outreach/api/schemas/match_schemas.py ---
@@ -45,10 +70,13 @@ export interface MatchSuggestion { // MatchSuggestionInDB
   match_score?: number | null;
   matched_keywords?: string[] | null;
   ai_reasoning?: string | null;
-  status: string; // 'pending', 'approved', 'rejected'
+  vetting_reasoning?: string | null; // Added this field
+  status: string; // 'pending_human_review', 'approved_by_client', 'rejected_by_client', etc.
   client_approved: boolean;
   approved_at?: string | null; // ISO datetime string
   created_at: string; // ISO datetime string
+  media?: Media; // This will be the enriched Media object
+  media_name?: string; // Fallback - make it optional since it might not always be present
 }
 
 // --- From podcast_outreach/api/schemas/media_schemas.py ---
@@ -89,6 +117,12 @@ export interface Media { // MediaInDB
   podcast_tiktok_url?: string | null;
   podcast_other_social_url?: string | null;
   host_names?: string[] | null; // From your DB schema
+  // --- Fields for Match Intelligence Card ---
+  quality_score?: number | null;
+  quality_score_recency?: number | null;
+  quality_score_frequency?: number | null;
+  quality_score_audience?: number | null;
+  quality_score_social?: number | null;
   // embedding is omitted
   created_at: string; // ISO datetime string
 }
@@ -165,106 +199,76 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
 
-  const { data: relatedData, isLoading: isLoadingRelated, error: relatedDataError } = useQuery({
-    queryKey: [`reviewTaskRelatedData`, task.task_type, task.related_id],
-    queryFn: async () => {
-      let entityName = "N/A";
-      let campaignName = "N/A";
-      let clientName = "N/A";
-      let mediaUrl: string | undefined = undefined;
-      let pitchDraftPreview: string | undefined = undefined;
-      let matchScore: number | null | undefined = undefined;
-      let aiReasoning: string | null | undefined = undefined;
-
-      try {
-        if (task.task_type === 'match_suggestion') {
-          const matchRes = await apiRequest("GET", `/match-suggestions/${task.related_id}`);
-          if (!matchRes.ok) throw new Error(`Failed to fetch match suggestion (${matchRes.status})`);
-          const match: MatchSuggestion = await matchRes.json();
-          matchScore = match.match_score;
-          aiReasoning = match.ai_reasoning;
-
-          if (match.media_id) {
-            const mediaRes = await apiRequest("GET", `/media/${match.media_id}`);
-            if (mediaRes.ok) {
-              const media: Media = await mediaRes.json();
-              entityName = media.name || "Unnamed Podcast";
-              mediaUrl = media.website || undefined;
-            } else {
-              console.warn(`Failed to fetch media ${match.media_id}: ${mediaRes.status} ${mediaRes.statusText}`);
-            }
-          }
-          if (match.campaign_id) {
-            const campaignRes = await apiRequest("GET", `/campaigns/${match.campaign_id}`);
-            if (campaignRes.ok) {
-              const campaign: Campaign = await campaignRes.json();
-              campaignName = campaign.campaign_name;
-              if (campaign.person_id) {
-                  const personRes = await apiRequest("GET", `/people/${campaign.person_id}`);
-                  if(personRes.ok) {
-                      const person: Person = await personRes.json();
-                      clientName = person.full_name || "Unknown Client";
-                  } else {
-                     console.warn(`Failed to fetch person ${campaign.person_id}: ${personRes.status} ${personRes.statusText}`);
-                  }
-              }
-            } else {
-                console.warn(`Failed to fetch campaign ${match.campaign_id}: ${campaignRes.status} ${campaignRes.statusText}`);
-            }
-          }
-        } else if (task.task_type === 'pitch_review') {
-          // CORRECTED PATH for fetching pitch generation
-          const pitchGenRes = await apiRequest("GET", `/pitches/generations/${task.related_id}`);
-          if (!pitchGenRes.ok) throw new Error(`Failed to fetch pitch generation (${pitchGenRes.status})`);
-          const pitchGen: PitchGeneration = await pitchGenRes.json();
-          
-          pitchDraftPreview = pitchGen.draft_text.substring(0, 150) + (pitchGen.draft_text.length > 150 ? "..." : "");
-
-          if (pitchGen.media_id) {
-            const mediaRes = await apiRequest("GET", `/media/${pitchGen.media_id}`);
-            if (mediaRes.ok) {
-              const media: Media = await mediaRes.json();
-              entityName = `Pitch for: ${media.name || "Unnamed Podcast"}`;
-              mediaUrl = media.website || undefined;
-            } else {
-              entityName = `Pitch for Media ID: ${pitchGen.media_id}`; // Fallback
-              console.warn(`Failed to fetch media ${pitchGen.media_id}: ${mediaRes.status} ${mediaRes.statusText}`);
-            }
-          }
-           if (pitchGen.campaign_id) {
-            const campaignRes = await apiRequest("GET", `/campaigns/${pitchGen.campaign_id}`);
-            if (campaignRes.ok) {
-              const campaign: Campaign = await campaignRes.json();
-              campaignName = campaign.campaign_name;
-               if (campaign.person_id) {
-                  const personRes = await apiRequest("GET", `/people/${campaign.person_id}`);
-                  if(personRes.ok) {
-                      const person: Person = await personRes.json();
-                      clientName = person.full_name || "Unknown Client";
-                  } else {
-                     console.warn(`Failed to fetch person ${campaign.person_id}: ${personRes.status} ${personRes.statusText}`);
-                  }
-              }
-            } else {
-                console.warn(`Failed to fetch campaign ${pitchGen.campaign_id}: ${campaignRes.status} ${campaignRes.statusText}`);
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`Error fetching related data for task ${task.review_task_id} (Type: ${task.task_type}, Related ID: ${task.related_id}):`, err);
-        // Let the error propagate to useQuery's error state
-        throw err;
-      }
-      return { entityName, campaignName, clientName, mediaUrl, pitchDraftPreview, match_score: matchScore, ai_reasoning: aiReasoning };
-    },
-    enabled: !!task.related_id,
-    staleTime: 1000 * 60 * 5,
-    retry: 1, // Retry once for fetching related data
-  });
+  // Enhanced endpoint provides all data, no need for separate queries
+  const relatedData = {
+    entityName: task.media_name || `Task for ID: ${task.related_id}`,
+    campaignName: task.campaign_name || "N/A",
+    clientName: task.client_name || "N/A",
+    mediaUrl: task.media_website || undefined,
+    pitchDraftPreview: undefined, // Not provided in enhanced response for pitch tasks
+    match_suggestion: task.task_type === 'match_suggestion' ? {
+      match_id: task.related_id,
+      campaign_id: task.campaign_id || '',
+      media_id: task.media_id || 0,
+      match_score: task.match_score,
+      matched_keywords: null, // Remove keyword overlap
+      ai_reasoning: task.vetting_reasoning,
+      vetting_reasoning: task.vetting_reasoning,
+      vetting_score: task.vetting_score,
+      status: task.status,
+      client_approved: task.status === 'approved',
+      created_at: task.created_at,
+      media: task.media_id ? {
+        media_id: task.media_id,
+        name: task.media_name || null,
+        website: task.media_website || null,
+        image_url: task.media_image_url || null,
+        description: task.media_description || null,
+        created_at: task.created_at,
+        ai_description: null,
+        contact_email: null,
+        language: null,
+        category: null,
+        company_id: null,
+        avg_downloads: null,
+        audience_size: null,
+        total_episodes: null,
+        itunes_id: null,
+        podcast_spotify_id: null,
+        listen_score: null,
+        listen_score_global_rank: null,
+        itunes_rating_average: null,
+        itunes_rating_count: null,
+        spotify_rating_average: null,
+        spotify_rating_count: null,
+        fetched_episodes: null,
+        source_api: null,
+        api_id: null,
+        last_posted_at: null,
+        podcast_twitter_url: task.podcast_twitter_url || null,
+        podcast_linkedin_url: task.podcast_linkedin_url || null,
+        podcast_instagram_url: task.podcast_instagram_url || null,
+        podcast_facebook_url: task.podcast_facebook_url || null,
+        podcast_youtube_url: task.podcast_youtube_url || null,
+        podcast_tiktok_url: task.podcast_tiktok_url || null,
+        podcast_other_social_url: null,
+        host_names: task.host_names || null,
+        quality_score: null,
+        quality_score_recency: null,
+        quality_score_frequency: null,
+        quality_score_audience: null,
+        quality_score_social: null
+      } : undefined,
+      media_name: task.media_name
+    } as MatchSuggestion : null
+  };
+  
+  const isLoadingRelated = false;
+  const relatedDataError = null;
 
   const reviewActionMutation = useMutation({
     mutationFn: async ({ endpoint, payload }: { endpoint: string; payload: any }) => {
-      const response = await apiRequest("PATCH", endpoint, payload);
+      const response = await apiRequest("POST", endpoint, payload);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Action failed" }));
         throw new Error(errorData.detail);
@@ -272,8 +276,7 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
       return response.json();
     },
     onSuccess: (data, variables) => {
-      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/"] });
-      tanstackQueryClient.invalidateQueries({ queryKey: [`reviewTaskRelatedData`, task.task_type, task.related_id] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/enhanced"] });
       toast({ title: "Action Successful", description: `Task ${variables.payload.status || 'processed'}.` });
     },
     onError: (error: any) => {
@@ -286,27 +289,21 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
   });
 
   const handleApprove = () => {
-    if (task.task_type === 'match_suggestion') {
-      // This PATCH to /review-tasks/ will trigger backend logic to approve the match
-      // and create a new 'pitch_review' task.
-      reviewActionMutation.mutate({ 
-        endpoint: `/review-tasks/${task.review_task_id}`, 
-        payload: { status: 'approved', notes: 'Approved by user via UI' } 
-      });
-    } else if (task.task_type === 'pitch_review') {
-      // This PATCH approves the pitch generation itself.
-      // The backend for this should also mark the 'pitch_review' task as completed.
-      reviewActionMutation.mutate({ 
-        endpoint: `/pitches/generations/${task.related_id}/approve`, 
-        payload: {} // Backend gets reviewer_id from authenticated user (Depends(get_current_user))
-      });
-    }
+    // Use the approve endpoint for match suggestions
+    reviewActionMutation.mutate({ 
+      endpoint: `/review-tasks/${task.review_task_id}/approve`, 
+      payload: { 
+        status: 'approved', 
+        notes: 'Approved by team via UI' 
+      } 
+    });
   };
 
   const handleReject = () => {
+    // Use the new approve endpoint with rejected status
     reviewActionMutation.mutate({ 
-      endpoint: `/review-tasks/${task.review_task_id}`, 
-      payload: { status: 'rejected', notes: 'Rejected by user via UI' } 
+      endpoint: `/review-tasks/${task.review_task_id}/approve`, 
+      payload: { status: 'rejected', notes: 'Rejected by team via UI' } 
     });
   };
 
@@ -348,6 +345,33 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
      );
   }
 
+  // --- NEW: Render MatchIntelligenceCard for match_suggestion tasks ---
+  if (task.task_type === 'match_suggestion' && relatedData?.match_suggestion) {
+    const isActionPending = reviewActionMutation.isPending;
+    return (
+      <MatchIntelligenceCard
+        match={relatedData.match_suggestion}
+        onApprove={() => handleApprove()} // `handleApprove` already knows the context
+        onReject={() => handleReject()}   // `handleReject` already knows the context
+        isActionPending={isActionPending}
+      />
+    );
+  }
+  
+  // --- NEW: Render PitchReviewCard for pitch_review tasks ---
+  if (task.task_type === 'pitch_review') {
+    const isActionPending = reviewActionMutation.isPending;
+    return (
+      <PitchReviewCard
+        task={task}
+        onApprove={() => handleApprove()}
+        onReject={() => handleReject()}
+        isActionPending={isActionPending}
+      />
+    );
+  }
+  
+  // --- Fallback to original card for other task types ---
   return (
     <Card className="hover:shadow-lg transition-shadow duration-150">
       <CardHeader className="pb-3">
@@ -359,9 +383,9 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
                 {currentStatusConfig.label}
               </Badge>
               <Badge variant="outline" className="capitalize text-xs px-2 py-0.5">{task.task_type.replace('_', ' ')}</Badge>
-              {task.task_type === 'match_suggestion' && typeof relatedData?.match_score === 'number' && (
+              {task.task_type === 'match_suggestion' && typeof task.match_score === 'number' && (
                 <Badge variant="default" className="text-xs bg-blue-600 text-white">
-                    Score: {Math.round(relatedData.match_score * 100)}%
+                    PGL Match Score: {Math.round(task.match_score)}/100
                 </Badge>
               )}
             </div>
@@ -375,12 +399,12 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
       </CardHeader>
       
       <CardContent className="space-y-2.5 text-sm pt-0">
-        {task.task_type === 'match_suggestion' && relatedData?.ai_reasoning && (
+        {task.task_type === 'match_suggestion' && task.vetting_reasoning && (
             <div className="bg-indigo-50 p-2.5 rounded-md border border-indigo-200">
                 <h4 className="text-xs font-semibold text-indigo-700 mb-1 flex items-center">
                     <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> AI-Generated Reasoning:
                 </h4>
-                <p className="text-indigo-800 text-xs whitespace-pre-wrap">{relatedData.ai_reasoning}</p>
+                <p className="text-indigo-800 text-xs whitespace-pre-wrap">{task.vetting_reasoning}</p>
             </div>
         )}
         {task.task_type === 'pitch_review' && relatedData?.pitchDraftPreview && (
@@ -389,7 +413,13 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
             <p className="text-gray-700 italic line-clamp-3 text-xs">{relatedData.pitchDraftPreview}</p>
           </div>
         )}
-         {task.notes && (
+         {task.recommendations && (
+          <div className="bg-blue-50 p-2.5 rounded-md border border-blue-200">
+            <h4 className="text-xs font-semibold text-blue-700 mb-1">RECOMMENDATIONS:</h4>
+            <p className="text-blue-800 text-xs">{task.recommendations}</p>
+          </div>
+        )}
+        {task.notes && (
           <div className="bg-yellow-50 p-2.5 rounded-md border border-yellow-200">
             <h4 className="text-xs font-semibold text-yellow-700 mb-1">NOTES:</h4>
             <p className="text-yellow-800 text-xs">{task.notes}</p>
@@ -416,7 +446,7 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
               onClick={handleApprove}
               size="sm"
               className="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1.5 h-auto"
-              disabled={reviewActionMutation.isPending && reviewActionMutation.variables?.payload?.status === 'approved'}
+              disabled={reviewActionMutation.isPending}
             >
               <ThumbsUp className="w-3.5 h-3.5 mr-1.5" />
               Approve
@@ -426,7 +456,7 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
               size="sm"
               variant="outline"
               className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 text-xs px-2 py-1.5 h-auto"
-              disabled={reviewActionMutation.isPending && reviewActionMutation.variables?.payload?.status === 'rejected'}
+              disabled={reviewActionMutation.isPending}
             >
               <ThumbsDown className="w-3.5 h-3.5 mr-1.5" />
               Reject
@@ -440,64 +470,130 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
 
 
 // --- Main Approvals Page Component ---
+const ITEMS_PER_PAGE = 10;
+
 export default function Approvals() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("pending");
-  const [taskTypeFilter, setTaskTypeFilter] = useState<"all" | "match_suggestion" | "pitch_review">("all");
+  const [taskTypeFilter, setTaskTypeFilter] = useState<"all" | "match_suggestion">("match_suggestion");
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Determine if user is a client
+  const isClient = user?.role?.toLowerCase() === 'client';
 
-  // Define the expected structure of the paginated API response for review tasks
   interface PaginatedReviewTasks {
     items: ReviewTask[];
     total: number;
     page: number;
     size: number;
-    pages?: number; // Optional, as not all paginated responses might include this
+    pages?: number; 
+  }
+  
+  // Enhanced endpoint might return paginated response or array
+  interface EnhancedReviewTasksResponse {
+    items?: ReviewTask[];
+    total?: number;
+    page?: number;
+    size?: number;
+    pages?: number;
   }
 
-  const { data: reviewTasksData, isLoading, error } = useQuery<PaginatedReviewTasks>({
-    queryKey: ["/review-tasks/", { 
+  // Fetch all data without pagination params to see if backend supports pagination
+  // IMPORTANT: For clients, the backend should filter review tasks to only include tasks for campaigns they own
+  // This should be implemented on the backend by checking: campaign.person_id == current_user.person_id
+  const { data: allDataResponse, isLoading, error, isFetching } = useQuery<ReviewTask[], Error>({
+    queryKey: ["/review-tasks/enhanced", { 
       status: statusFilter === "all" ? undefined : statusFilter, 
-      task_type: taskTypeFilter === "all" ? undefined : taskTypeFilter 
-      // Add page and size parameters here if you implement pagination for this view
+      task_type: "match_suggestion"
     }],
-    // queryFn is implicitly handled by your global queryClient setup if using defaultQueryFn
+    placeholderData: (previousData) => previousData,
   });
   
-  const reviewTasks = reviewTasksData?.items || []; // Correctly access the items array
+  // Client-side pagination
+  const allTasks = allDataResponse || [];
+  const totalTasks = allTasks.length;
+  const totalPages = Math.ceil(totalTasks / ITEMS_PER_PAGE);
+  
+  // Apply client-side pagination
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedTasks = allTasks.slice(startIndex, endIndex);
+  
+  // Debug logging
+  console.log('Pagination debug:', {
+    ITEMS_PER_PAGE,
+    totalTasks,
+    currentPage,
+    startIndex,
+    endIndex,
+    paginatedTasksLength: paginatedTasks.length,
+    totalPages
+  });
+  
+  const reviewTasksData: PaginatedReviewTasks = {
+    items: paginatedTasks,
+    total: totalTasks,
+    page: currentPage,
+    size: ITEMS_PER_PAGE,
+    pages: totalPages
+  };
+  
+  const reviewTasks = reviewTasksData.items;
 
   const displayedTasks = reviewTasks.filter((task: ReviewTask) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     const relatedIdMatch = task.related_id.toString().includes(term);
     const notesMatch = task.notes?.toLowerCase().includes(term);
-    // Client-side search on asynchronously loaded fields (related_entity_name, campaign_name) is tricky.
-    // For now, this search is limited. Backend search is better.
     return relatedIdMatch || notesMatch;
   });
 
+  // Calculate stats from all tasks
   const stats = {
-    total: reviewTasks.length,
-    pending: reviewTasks.filter((task) => task.status === 'pending').length,
-    approved: reviewTasks.filter((task) => task.status === 'approved').length,
-    completed: reviewTasks.filter((task) => task.status === 'completed').length,
-    rejected: reviewTasks.filter((task) => task.status === 'rejected').length,
+    total: totalTasks,
+    pending: allTasks.filter((task: ReviewTask) => task.status === 'pending').length,
+    approved: allTasks.filter((task: ReviewTask) => task.status === 'approved').length,
+    completed: allTasks.filter((task: ReviewTask) => task.status === 'completed').length,
+    rejected: allTasks.filter((task: ReviewTask) => task.status === 'rejected').length,
   };
+  // Define which keys from stats map to reviewTaskStatusConfig
+  const statusKeysForStats: Array<keyof Omit<typeof stats, 'total'>> = ['pending', 'approved', 'completed', 'rejected'];
+
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, taskTypeFilter]);
 
   if (error) {
-    return <div className="text-red-500 p-4">Error loading review tasks: {(error as Error).message}</div>;
+    return <div className="text-red-500 p-4">Error loading review tasks: {error.message}</div>;
   }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
-        {(Object.keys(stats) as Array<keyof typeof stats>).map(key => {
-          const statusConf = reviewTaskStatusConfig[key as keyof typeof reviewTaskStatusConfig] || reviewTaskStatusConfig.default;
+        {/* Total Card - Rendered Separately */}
+        <Card className="shadow-sm">
+          <CardContent className="p-3 md:p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs md:text-sm font-medium text-gray-500 capitalize">Total Tasks</p>
+                <p className="text-lg md:text-xl font-bold text-gray-800">{stats.total}</p>
+              </div>
+              <ListChecks className={`h-5 w-5 md:h-6 md:w-6 text-gray-500`} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Other Status Cards */}
+        {statusKeysForStats.map(key => {
+          const statusConf = reviewTaskStatusConfig[key] || reviewTaskStatusConfig.default;
           return (
             <Card key={key} className="shadow-sm">
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-500 capitalize">{statusConf.label || key.replace(/([A-Z])/g, ' $1')}</p>
+                    <p className="text-xs md:text-sm font-medium text-gray-500 capitalize">{statusConf.label}</p>
                     <p className="text-lg md:text-xl font-bold text-gray-800">{stats[key]}</p>
                   </div>
                   <statusConf.icon className={`h-5 w-5 md:h-6 md:w-6 ${statusConf.color.replace('bg-', 'text-').split(' ')[0]}`} />
@@ -510,8 +606,12 @@ export default function Approvals() {
 
       <Card className="shadow-md">
         <CardHeader>
-            <CardTitle className="text-xl">Review Queue</CardTitle>
-            <CardDescription>Manage pending match suggestions and pitch drafts.</CardDescription>
+            <CardTitle className="text-xl">{isClient ? 'Approve Matches' : 'Match Suggestion Approvals'}</CardTitle>
+            <CardDescription>
+              {isClient 
+                ? 'Review and approve podcast matches for your campaigns.' 
+                : 'Review and approve AI-generated podcast match suggestions.'}
+            </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-3 items-center justify-between mb-4">
@@ -526,7 +626,12 @@ export default function Approvals() {
                 />
               </div>
               
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+              <Select 
+                value={statusFilter} 
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-[160px] text-sm">
                   <Filter className="h-3.5 w-3.5 mr-1.5" />
                   <SelectValue placeholder="Status" />
@@ -540,22 +645,13 @@ export default function Approvals() {
                 </SelectContent>
               </Select>
 
-              <Select value={taskTypeFilter} onValueChange={(value) => setTaskTypeFilter(value as typeof taskTypeFilter)}>
-                <SelectTrigger className="w-full sm:w-[180px] text-sm">
-                  <SelectValue placeholder="Task Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Task Types</SelectItem>
-                  <SelectItem value="match_suggestion">Match Suggestions</SelectItem>
-                  <SelectItem value="pitch_review">Pitch Reviews</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Task type filter removed - only showing match suggestions */}
             </div>
           </div>
 
-          {isLoading ? (
+          {isLoading && !reviewTasksData && displayedTasks.length === 0 ? ( 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-lg" />)}
+                {[...Array(Math.min(5, ITEMS_PER_PAGE))].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-lg" />)}
             </div>
           ) : displayedTasks.length === 0 ? (
             <div className="text-center py-10">
@@ -568,6 +664,32 @@ export default function Approvals() {
               {displayedTasks.map((task) => (
                 <ReviewTaskItem key={task.review_task_id} task={task} />
               ))}
+            </div>
+          )}
+
+          {totalPages > 0 && (
+            <div className="mt-6 flex items-center justify-between pt-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || isFetching}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+              <span className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages} (Total: {totalTasks})
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0 || isFetching}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
             </div>
           )}
         </CardContent>

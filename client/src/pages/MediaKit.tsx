@@ -19,6 +19,7 @@ import { Link as WouterLink, useLocation } from "wouter"; // Renamed to avoid co
 import {
   BookOpen, Save, Eye, Share2, Settings, AlertTriangle, Info, ExternalLink, PlusCircle, Trash2, RefreshCcw, Image as ImageIcon, Link2
 } from "lucide-react";
+import { ImageUpload } from "@/components/ImageUpload";
 
 // --- Zod Schema for Editable Media Kit Content ---
 // This schema represents fields the user can directly edit in this UI.
@@ -33,7 +34,7 @@ const mediaKitEditableContentSchema = z.object({
     episode_title: z.string().optional().nullable(),
     link: z.string().url("Must be a valid URL.").optional().nullable(),
   })).optional().default([]),
-  headshot_image_urls: z.array(z.object({ url: z.string().url("Must be a valid URL.") })).optional().default([]),
+  headshot_image_url: z.string().url("Must be a valid URL.").optional().or(z.literal("")).nullable(),
   logo_image_url: z.string().url("Must be a valid URL.").optional().or(z.literal("")).nullable(),
   call_to_action_text: z.string().optional().nullable(),
   contact_information_for_booking: z.string().optional().nullable(),
@@ -69,7 +70,7 @@ interface MediaKitData { // Matches MediaKitInDB from backend
   key_achievements?: Array<{ value: string }> | null; // Stored as JSONB [{value: "ach1"}, {value: "ach2"}]
   previous_appearances?: Array<{ podcast_name: string; episode_title?: string; link?: string }> | null;
   social_media_stats?: Record<string, { followers?: number; url?: string }> | null; // e.g. {"twitter": {"followers": 1000, "url": "..."}}
-  headshot_image_urls?: Array<{ url: string }> | null; // Stored as JSONB [{url: "url1"}, {url: "url2"}]
+  headshot_image_url?: string | null; // Changed from array
   logo_image_url?: string | null;
   call_to_action_text?: string | null;
   contact_information_for_booking?: string | null;
@@ -120,15 +121,13 @@ export default function MediaKitPage() {
     resolver: zodResolver(mediaKitEditableContentSchema),
     defaultValues: {
         title: "", headline: "", introduction: "", key_achievements: [], previous_appearances: [],
-        headshot_image_urls: [], logo_image_url: "", call_to_action_text: "",
+        headshot_image_url: "", logo_image_url: "", call_to_action_text: "",
         contact_information_for_booking: "", theme_preference: "modern", is_public: false, slug: ""
     },
   });
 
   const { fields: achievementFields, append: appendAchievement, remove: removeAchievement } = useFieldArray({ control: form.control, name: "key_achievements" });
   const { fields: appearanceFields, append: appendAppearance, remove: removeAppearance } = useFieldArray({ control: form.control, name: "previous_appearances" });
-  const { fields: headshotFields, append: appendHeadshot, remove: removeHeadshot } = useFieldArray({ control: form.control, name: "headshot_image_urls" });
-
 
   useEffect(() => {
     if (mediaKitData) {
@@ -138,7 +137,7 @@ export default function MediaKitPage() {
         introduction: mediaKitData.introduction || "",
         key_achievements: mediaKitData.key_achievements || [],
         previous_appearances: mediaKitData.previous_appearances || [],
-        headshot_image_urls: mediaKitData.headshot_image_urls || [],
+        headshot_image_url: mediaKitData.headshot_image_url || "",
         logo_image_url: mediaKitData.logo_image_url || "",
         call_to_action_text: mediaKitData.call_to_action_text || "",
         contact_information_for_booking: mediaKitData.contact_information_for_booking || "",
@@ -151,7 +150,7 @@ export default function MediaKitPage() {
         form.reset({
             title: currentCampaign ? `Media Kit for ${currentCampaign.campaign_name}` : "",
             headline: "", introduction: "", key_achievements: [], previous_appearances: [],
-            headshot_image_urls: [], logo_image_url: "", call_to_action_text: "",
+            headshot_image_url: "", logo_image_url: "", call_to_action_text: "",
             contact_information_for_booking: "", theme_preference: "modern", is_public: false, slug: ""
         });
     }
@@ -175,6 +174,23 @@ export default function MediaKitPage() {
     onError: (error: any) => {
       toast({ title: "Error Saving Media Kit", description: error.message, variant: "destructive" });
     },
+  });
+
+  const generateContentMutation = useMutation({
+      mutationFn: async () => {
+          if (!selectedCampaignId) throw new Error("No campaign selected.");
+          return apiRequest("POST", `/campaigns/${selectedCampaignId}/generate-media-kit-content`);
+      },
+      onSuccess: () => {
+          toast({ title: "Content Generation Started", description: "The AI is generating your media kit content. The page will update shortly." });
+          // Poll for updates or rely on user to manually refetch for simplicity here. Let's refetch after a delay.
+          setTimeout(() => {
+              refetchMediaKit();
+          }, 5000); // 5 second delay before refetch
+      },
+      onError: (error: any) => {
+          toast({ title: "Content Generation Failed", description: error.message, variant: "destructive" });
+      }
   });
 
   const onSubmit = (data: MediaKitEditableFormData) => {
@@ -250,20 +266,43 @@ export default function MediaKitPage() {
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-semibold text-gray-700 mb-1">Client Bio (from Campaign)</h4>
-                      {selectedCampaignDetails.campaign_bio_gdoc_link ? (
-                        <a href={selectedCampaignDetails.campaign_bio_gdoc_link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center">
-                          <ExternalLink className="h-4 w-4 mr-1"/> View Bio Document
-                        </a>
-                      ) : <p className="text-sm text-gray-500 italic">Bio document not yet generated for this campaign. <WouterLink href={`/profile-setup?campaignId=${selectedCampaignId}&tab=aiBioAngles`} className="underline">Generate it now?</WouterLink></p>}
+                      {mediaKitData?.full_bio_content ? (
+                        <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap">
+                            {mediaKitData.full_bio_content}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Bio content not yet generated for this campaign.</p>
+                      )}
+                    </div>
+                     <div>
+                      <h4 className="font-semibold text-gray-700 mb-1">AI-Generated Summary Bio</h4>
+                      {mediaKitData?.summary_bio_content ? (
+                        <div className="p-3 bg-gray-50 border rounded-md text-sm text-gray-800 whitespace-pre-wrap">
+                            {mediaKitData.summary_bio_content}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Summary bio not yet generated.</p>
+                      )}
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-700 mb-1">Talking Points/Angles (from Campaign)</h4>
-                      {selectedCampaignDetails.campaign_angles_gdoc_link ? (
-                        <a href={selectedCampaignDetails.campaign_angles_gdoc_link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center">
-                          <ExternalLink className="h-4 w-4 mr-1"/> View Angles Document
-                        </a>
-                      ) : <p className="text-sm text-gray-500 italic">Angles document not yet generated for this campaign. <WouterLink href={`/profile-setup?campaignId=${selectedCampaignId}&tab=aiBioAngles`} className="underline">Generate it now?</WouterLink></p>}
+                      <h4 className="font-semibold text-gray-700 mb-1">AI-Generated Talking Points</h4>
+                      {mediaKitData?.talking_points && mediaKitData.talking_points.length > 0 ? (
+                        <div className="p-3 bg-gray-50 border rounded-md space-y-2">
+                            {mediaKitData.talking_points.map((point, index) => (
+                                <div key={index} className="text-sm">
+                                    <p className="font-semibold text-gray-800">{point.topic}</p>
+                                    <p className="text-gray-600 pl-2">{point.description}</p>
+                                </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Talking points not yet generated.</p>
+                      )}
                     </div>
+                     <Button type="button" variant="secondary" size="sm" onClick={() => generateContentMutation.mutate()} disabled={generateContentMutation.isPending}>
+                        <RefreshCcw className={`mr-2 h-4 w-4 ${generateContentMutation.isPending ? 'animate-spin' : ''}`}/>
+                        {generateContentMutation.isPending ? 'Generating...' : 'Refresh AI Content'}
+                    </Button>
                   </div>
                   <hr className="my-6"/>
 
@@ -312,24 +351,37 @@ export default function MediaKitPage() {
                     {appearanceFields.length < 3 && <Button type="button" variant="outline" size="sm" onClick={() => appendAppearance({ podcast_name: "", episode_title: "", link: "" })}><PlusCircle className="mr-2 h-4 w-4"/>Add Appearance</Button>}
                   </FormItem>
 
-                  {/* Headshots */}
-                  <FormItem>
-                    <FormLabel>Headshot Image URLs (up to 3)</FormLabel>
-                    {headshotFields.map((field, index) => (
-                        <div key={field.id} className="flex items-center space-x-2">
-                            <FormField control={form.control} name={`headshot_image_urls.${index}.url`} render={({ field: itemField }) => (
-                                <FormControl><Input type="url" placeholder={`Headshot URL ${index + 1}`} {...itemField}/></FormControl>
-                            )}/>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removeHeadshot(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
-                        </div>
-                    ))}
-                    {headshotFields.length < 3 && <Button type="button" variant="outline" size="sm" onClick={() => appendHeadshot({ url: "" })}><ImageIcon className="mr-2 h-4 w-4"/>Add Headshot URL</Button>}
-                    <FormMessage>{form.formState.errors.headshot_image_urls?.message}</FormMessage>
-                  </FormItem>
-
+                  {/* Headshot Upload */}
+                  <FormField control={form.control} name="headshot_image_url" render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Your Headshot</FormLabel>
+                        <FormControl>
+                            <ImageUpload 
+                                uploadContext="media_kit_headshot"
+                                onUploadComplete={(url) => field.onChange(url)}
+                                currentImageUrl={field.value}
+                            />
+                        </FormControl>
+                        <FormDescription>Upload a high-quality, professional headshot.</FormDescription>
+                        <FormMessage />
+                     </FormItem>
+                  )}/>
+                  
+                  {/* Logo Upload */}
                   <FormField control={form.control} name="logo_image_url" render={({ field }) => (
-                    <FormItem><FormLabel>Company Logo URL (Optional)</FormLabel><FormControl><Input type="url" placeholder="https://link.to/logo.png" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
+                     <FormItem>
+                        <FormLabel>Company Logo (Optional)</FormLabel>
+                         <FormControl>
+                            <ImageUpload 
+                                uploadContext="media_kit_logo"
+                                onUploadComplete={(url) => field.onChange(url)}
+                                currentImageUrl={field.value}
+                            />
+                        </FormControl>
+                        <FormDescription>Upload your company's logo.</FormDescription>
+                        <FormMessage />
+                     </FormItem>
+                  )}/>
 
                   <FormField control={form.control} name="call_to_action_text" render={({ field }) => (
                     <FormItem><FormLabel>Call to Action Text (Optional)</FormLabel><FormControl><Input placeholder="e.g., Book Me On Your Podcast!" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>

@@ -53,10 +53,6 @@ export default function Header() {
     window.open("https://calendly.com", "_blank");
   };
 
-  const getInitials = (firstName?: string, lastName?: string) => {
-    if (!firstName && !lastName) return "U";
-    return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
-  };
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -76,11 +72,11 @@ export default function Header() {
             </Button>
             <Avatar className="h-10 w-10">
               <AvatarImage 
-                src={user?.profileImageUrl || undefined} 
-                alt={`${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "User"}
+                src={user?.profile_image_url ? `${user.profile_image_url}?t=${Date.now()}` : undefined} 
+                alt={user?.full_name || user?.username || "User"}
               />
               <AvatarFallback className="bg-gray-300 text-gray-700">
-                {getInitials(user?.firstName, user?.lastName)}
+                {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : user?.username?.[0]?.toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
           </div>
