@@ -10,3 +10,6 @@ vite.config.ts.*
 .env.production
 .env.test
 .env.test.local
+
+# Claude AI settings
+.claude
