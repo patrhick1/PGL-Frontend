@@ -50,6 +50,7 @@ export default defineConfig({
     allowedHosts: [
       "localhost:5173",
       "podcastguestlaunch.replit.app",
+      "podcastguestlaunch.onrender.com",
       ".replit.dev",
       ".repl.co",
       ".replit.app",
