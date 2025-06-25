@@ -40,6 +40,7 @@ export default defineConfig({
     port: 5000,
     allowedHosts: [
       "podcastguestlaunch.replit.app",
+      "https://podcastguestlaunch.onrender.com",
       ".replit.dev",
       ".repl.co",
       ".replit.app",
