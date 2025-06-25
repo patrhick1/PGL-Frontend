@@ -575,7 +575,7 @@ export default function AdminPanel() {
   const [runningUiTasks, setRunningUiTasks] = useState<Record<string, boolean>>({});
 
   const { data: people = [], isLoading: isLoadingPeople, error: peopleError } = useQuery<Person[]>({
-    queryKey: ["/people/"], retry: 1,
+    queryKey: ["/people/non-hosts"], retry: 1,
   });
   const { data: campaignsData = [], isLoading: isLoadingCampaigns, error: campaignsError } = useQuery<Campaign[]>({
     queryKey: ["/campaigns/"], retry: 1,
@@ -650,7 +650,7 @@ export default function AdminPanel() {
     mutationFn: (personId: number) => apiRequest("DELETE", `/people/${personId}`),
     onSuccess: () => {
       toast({ title: "Success", description: "Person deleted successfully" });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["/people/non-hosts"] });
     },
     onError: (error: any) => {
       toast({ title: "Error Deleting Person", description: error.message || "Failed to delete person.", variant: "destructive" });
@@ -686,13 +686,11 @@ export default function AdminPanel() {
 
 
   const filteredPeople = people.filter((person: Person) =>
-    person.role?.toLowerCase() !== 'host' && (
-      (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      person.person_id.toString().includes(searchTerm)
-    )
+    (person.full_name && person.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (person.email && person.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (person.dashboard_username && person.dashboard_username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    person.person_id.toString().includes(searchTerm)
   );
   // Client-side filtering for campaigns is now implemented with filteredCampaigns
 
@@ -766,7 +764,7 @@ export default function AdminPanel() {
                 <CardTitle>People Management</CardTitle>
                 <CardDescription>View, create, edit, and manage users (clients, staff, admins).</CardDescription>
             </div>
-            <CreatePersonDialog onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] })} />
+            <CreatePersonDialog onSuccess={() => tanstackQueryClient.invalidateQueries({ queryKey: ["/people/non-hosts"] })} />
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4 mb-6">
@@ -829,7 +827,7 @@ export default function AdminPanel() {
           open={isEditPersonDialogOpen}
           onOpenChange={setIsEditPersonDialogOpen}
           onSuccess={() => {
-            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/non-hosts"] });
             setEditingPerson(null);
           }}
         />
@@ -842,7 +840,7 @@ export default function AdminPanel() {
           open={isSetPasswordDialogOpen}
           onOpenChange={setIsSetPasswordDialogOpen}
           onSuccess={() => {
-            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/"] });
+            tanstackQueryClient.invalidateQueries({ queryKey: ["/people/non-hosts"] });
             setPasswordPerson(null);
           }}
         />
