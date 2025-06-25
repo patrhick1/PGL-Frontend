@@ -34,11 +34,21 @@ export default defineConfig({
     hmr: {
       clientPort: 443,
     },
+    allowedHosts: [
+      "localhost",
+      "localhost:5173",
+      "localhost:5000",
+      "podcastguestlaunch.replit.app",
+      ".replit.dev",
+      ".repl.co",
+      ".replit.app",
+    ],
   },
   preview: {
     host: "0.0.0.0",
     port: 5000,
     allowedHosts: [
+      "localhost:5173",
       "podcastguestlaunch.replit.app",
       ".replit.dev",
       ".repl.co",
