@@ -23,4 +23,7 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: true,
   },
+  preview: {
+    allowedHosts: ['podcastguestlaunch.onrender.com'],
+  },
 })
