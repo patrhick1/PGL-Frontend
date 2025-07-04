@@ -38,8 +38,8 @@ interface NavigationItem {
 // --- CLIENT NAVIGATION ---
 const clientNavigationItems: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: BarChart3, roles: ['client'] },
+  { name: "Guest Profile Setup", href: "/profile-setup", icon: ClipboardList, roles: ['client'] },
   { name: "My Campaigns", href: "/my-campaigns", icon: FolderOpen, roles: ['client'] },
-  { name: "Profile & Content Setup", href: "/profile-setup", icon: ClipboardList, roles: ['client'] },
   { name: "Approve Matches", href: "/approvals", icon: CheckCircle, roles: ['client'] }, // Approvals page will filter for clients
   { name: "Track Placements", href: "/placement-tracking", icon: TrendingUp, roles: ['client'] },
   { name: "Discover Podcasts", href: "/discover", icon: Search, roles: ['client'] }, // Client's limited discovery

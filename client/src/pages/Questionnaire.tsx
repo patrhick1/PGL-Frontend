@@ -13,12 +13,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
-import { ClipboardList, CheckCircle, Save, AlertTriangle, Info, Plus, X, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { ClipboardList, CheckCircle, Save, AlertTriangle, Info, Plus, X, Upload, ChevronLeft, ChevronRight, MessageSquare, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ImageUpload } from "@/components/ImageUpload";
+import { ChatInterface } from "@/components/chat/ChatInterface";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Define Campaign interface to match backend (simplified for this context)
 interface ClientCampaign {
@@ -137,6 +139,24 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
   const [isProcessingContent, setIsProcessingContent] = useState(false);
   const [currentSection, setCurrentSection] = useState(0);
   const [completedSections, setCompletedSections] = useState<Set<number>>(new Set());
+  
+  // Mode toggle state - default to 'form' for safety
+  const [mode, setMode] = useState<'form' | 'chat'>(() => {
+    const saved = localStorage.getItem('questionnaire-mode');
+    return saved === 'chat' ? 'chat' : 'form';
+  });
+  
+  // Save mode preference
+  useEffect(() => {
+    localStorage.setItem('questionnaire-mode', mode);
+    // Track mode selection for analytics
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'questionnaire_mode_selected', {
+        mode: mode,
+        campaign_id: campaignId
+      });
+    }
+  }, [mode, campaignId]);
 
   const { data: existingQuestionnaire, isLoading: isLoadingQuestionnaire, refetch: refetchQuestionnaire } = useQuery<QuestionnaireFormData | null>({
     queryKey: ["campaignQuestionnaireData", campaignId],
@@ -391,10 +411,49 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
 
   const currentSectionData = sections[currentSection];
 
+  // Handle chat completion
+  const handleChatComplete = (data: any) => {
+    // Convert chat data to questionnaire format and save
+    submitMutation.mutate(data);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Welcome Section - only show on first load */}
-      {currentSection === 0 && !existingQuestionnaire && (
+      {/* Mode Toggle */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Profile Setup Method</CardTitle>
+              <CardDescription>
+                Choose how you'd like to provide your information
+              </CardDescription>
+            </div>
+            <ToggleGroup type="single" value={mode} onValueChange={(value) => value && setMode(value as 'form' | 'chat')}>
+              <ToggleGroupItem value="form" aria-label="Form mode">
+                <FileText className="mr-2 h-4 w-4" />
+                Traditional Form
+              </ToggleGroupItem>
+              <ToggleGroupItem value="chat" aria-label="Chat mode">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Chat Assistant
+                <Badge variant="secondary" className="ml-2">Beta</Badge>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Show chat interface if chat mode is selected */}
+      {mode === 'chat' ? (
+        <ChatInterface 
+          campaignId={campaignId} 
+          onComplete={handleChatComplete}
+        />
+      ) : (
+        <>
+          {/* Welcome Section - only show on first load */}
+          {currentSection === 0 && !existingQuestionnaire && (
         <Card className="bg-blue-50 border-blue-200">
           <CardHeader>
             <CardTitle className="text-blue-800 flex items-center gap-2">
@@ -514,6 +573,8 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
           </div>
         </form>
       </Form>
+        </>
+      )}
     </div>
   );
 }

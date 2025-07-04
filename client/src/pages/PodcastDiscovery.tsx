@@ -272,6 +272,15 @@ export default function PodcastDiscovery() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+      {/* How Discovery Works - Instructions at the top for better UX */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardHeader><CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>How Discovery Works</CardTitle></CardHeader>
+        <CardContent className="text-sm text-blue-600 space-y-1">
+            <p><strong>For Clients:</strong> Select your active campaign. Our AI analyzes your campaign goals and profile (from the Questionnaire) to find relevant podcast previews. You can then select up to 5 previews to request a full review by our team. Your discovery usage is subject to plan limits.</p>
+            <p><strong>For Staff/Admins:</strong> Select a client campaign. The system will use its existing profile and keywords to find podcasts, automatically create match suggestions, and generate review tasks for the team.</p>
+        </CardContent>
+      </Card>
+
       {/* --- UI for CLIENTS --- */}
       {userRoleLower === 'client' && (
         <>
@@ -525,13 +534,6 @@ export default function PodcastDiscovery() {
         </>
       )}
 
-      <Card className="bg-blue-50 border-blue-200">
-        <CardHeader><CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>How Discovery Works</CardTitle></CardHeader>
-        <CardContent className="text-sm text-blue-600 space-y-1">
-            <p><strong>For Clients:</strong> Select your active campaign. Our AI analyzes your campaign goals and profile (from the Questionnaire) to find relevant podcast previews. You can then select up to 5 previews to request a full review by our team. Your discovery usage is subject to plan limits.</p>
-            <p><strong>For Staff/Admins:</strong> Select a client campaign. The system will use its existing profile and keywords to find podcasts, automatically create match suggestions, and generate review tasks for the team.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

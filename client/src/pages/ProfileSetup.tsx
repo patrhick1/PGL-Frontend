@@ -102,6 +102,42 @@ export default function ProfileSetup() {
     }
   };
 
+  // Mutation for updating keywords
+  const updateKeywordsMutation = useMutation({
+    mutationFn: async (keywords: string[]) => {
+      if (!selectedCampaignId) throw new Error("No campaign selected");
+      
+      const response = await apiRequest("PATCH", `/campaigns/${selectedCampaignId}`, {
+        campaign_keywords: keywords
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Failed to update keywords" }));
+        throw new Error(errorData.detail || "Failed to update keywords");
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage"] });
+      tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
+      toast({ 
+        title: "Keywords Updated", 
+        description: "Your campaign keywords have been saved successfully." 
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to update keywords", 
+        description: error.message || "Please try again later.", 
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const handleKeywordsUpdate = async (keywords: string[]) => {
+    await updateKeywordsMutation.mutateAsync(keywords);
+  };
 
   if (authLoading || isLoadingCampaigns) {
     return (
@@ -221,6 +257,8 @@ export default function ProfileSetup() {
                         tanstackQueryClient.invalidateQueries({ queryKey: ["campaignDetail", selectedCampaignId] });
                         tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", selectedCampaignId, "/media-kit"] }); // Invalidate media kit data too
                       }}
+                      onKeywordsUpdate={handleKeywordsUpdate}
+                      isKeywordsUpdateLoading={updateKeywordsMutation.isPending}
                     />
                 ) : (
                     <Card>
@@ -231,6 +269,7 @@ export default function ProfileSetup() {
                     </Card>
                 )}
               </TabsContent>
+
 
               <TabsContent value="mediaKit" className="mt-6">
                 <MediaKitTab campaignId={selectedCampaignId} />

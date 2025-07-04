@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import NotFound from "./not-found"; // Assuming you have a 404 component
 import { Link as RouterLink } from "wouter"; // Added for CTA button
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
 // Interface for the data expected from GET /public/media-kit/{slug}
 interface PublicMediaKitData {
@@ -119,15 +120,7 @@ const getInitials = (name?: string | null) => {
   return name[0].toUpperCase();
 };
 
-// Helper function to convert markdown-style bold to HTML strong tags
-const formatMarkdownBold = (text?: string | null): string => {
-  if (!text) return "";
-  // Handle **bold**
-  let formattedText = text.replace(/\\*\\*(.*?)\\*\\*/g, "<strong>$1</strong>");
-  // Handle *italic* (if needed, though the example focuses on bold)
-  // formattedText = formattedText.replace(/\\*(.*?)\\*/g, "<em>$1</em>");
-  return formattedText;
-};
+// Note: formatMarkdownBold has been replaced by MarkdownRenderer component for better markdown support
 
 // Helper function to extract the main bio from full_bio_content
 const getMainBio = (fullBio?: string | null): string => {
@@ -151,7 +144,7 @@ const getMainBio = (fullBio?: string | null): string => {
   if (mainBio.startsWith("**Full Bio:**")) {
     mainBio = mainBio.substring("**Full Bio:**".length).trim();
   }
-  return formatMarkdownBold(mainBio);
+  return mainBio;
 };
 
 export default function PublicMediaKitPage() {
@@ -228,7 +221,54 @@ export default function PublicMediaKitPage() {
 
   // Extracting At-a-Glance stats from custom_sections
   const atAGlanceSection = mediaKit.custom_sections?.find(section => section.title === "At a Glance Stats");
-  const atAGlanceStats = atAGlanceSection?.content as PublicMediaKitData['at_a_glance_stats_custom'] | undefined;
+  let atAGlanceStats: PublicMediaKitData['at_a_glance_stats_custom'] | undefined;
+  
+     if (atAGlanceSection?.content) {
+     // Debug logging to understand the data structure
+     console.log('🔍 At-a-Glance Section Debug:', {
+       title: atAGlanceSection.title,
+       content: atAGlanceSection.content,
+       contentType: typeof atAGlanceSection.content,
+       isArray: Array.isArray(atAGlanceSection.content)
+     });
+     
+     // Handle different possible data structures
+     if (Array.isArray(atAGlanceSection.content)) {
+       // If content is an array, try to map the items to our expected structure
+       const statsArray = atAGlanceSection.content;
+       atAGlanceStats = {};
+       
+       statsArray.forEach((item: any) => {
+         if (typeof item === 'object' && item.label && item.value) {
+           const label = item.label.toLowerCase();
+           if (label.includes('podcast') || label.includes('appearance')) {
+             atAGlanceStats!.keynoteEngagements = item.value;
+           } else if (label.includes('year') || label.includes('experience')) {
+             atAGlanceStats!.yearsOfExperience = item.value;
+           } else if (label.includes('email') || label.includes('subscriber') || label.includes('automation')) {
+             atAGlanceStats!.emailSubscribers = item.value;
+           }
+         }
+       });
+     } else if (typeof atAGlanceSection.content === 'object') {
+       // If content is an object, use it directly or map its properties
+       atAGlanceStats = atAGlanceSection.content as PublicMediaKitData['at_a_glance_stats_custom'];
+       
+       // Also check for alternative property names
+       const content = atAGlanceSection.content as any;
+       if (!atAGlanceStats?.keynoteEngagements && (content.podcastAppearances || content.appearances)) {
+         atAGlanceStats = { ...atAGlanceStats, keynoteEngagements: content.podcastAppearances || content.appearances };
+       }
+       if (!atAGlanceStats?.yearsOfExperience && content.experience) {
+         atAGlanceStats = { ...atAGlanceStats, yearsOfExperience: content.experience };
+       }
+       if (!atAGlanceStats?.emailSubscribers && (content.subscribers || content.emailList)) {
+         atAGlanceStats = { ...atAGlanceStats, emailSubscribers: content.subscribers || content.emailList };
+       }
+     }
+     
+     console.log('📊 Processed At-a-Glance Stats:', atAGlanceStats);
+   }
 
   // Parsing contact_information_for_booking
   let bookingInfo: { booking_email?: string; website?: string; phone?: string; preferred_contact_for_hosts?: string; } = {};
@@ -302,7 +342,9 @@ export default function PublicMediaKitPage() {
               </h1>
             )}
             {tagline && (
-              <p className="mt-3 text-xl sm:text-2xl text-slate-200 filter drop-shadow-md" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(tagline) }} />
+              <p className="mt-3 text-xl sm:text-2xl text-slate-200 filter drop-shadow-md">
+                <MarkdownRenderer content={tagline} prose={false} className="inline" />
+              </p>
             )}
             {socialLinks.length > 0 && (
               <div className="mt-6 flex justify-center md:justify-start space-x-5">
@@ -326,48 +368,136 @@ export default function PublicMediaKitPage() {
 
       <main className="max-w-5xl mx-auto py-10 md:py-16 px-4 sm:px-6 lg:px-8 bg-white -mt-12 md:-mt-20 rounded-t-xl shadow-2xl">
         <div className="space-y-12 md:space-y-16 p-4 md:p-6">
-          {mainBioHtml && (
+          {mediaKit.full_bio_content && (
             <section className="py-4">
               <h2 className="text-3xl font-bold text-slate-800 mb-5 tracking-tight">About {mediaKit.client_full_name && mediaKit.client_full_name.split(' ')[0]}</h2>
-              <div 
-                className="prose prose-lg prose-slate max-w-none text-slate-700 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: mainBioHtml.replace(/\\n/g, '<br />') }} 
+              <MarkdownRenderer 
+                content={getMainBio(mediaKit.full_bio_content)}
+                className="prose-lg text-slate-700"
               />
             </section>
           )}
 
-          {(atAGlanceStats || (mediaKit.key_achievements && mediaKit.key_achievements.length > 0)) && (
+          {(atAGlanceStats || atAGlanceSection || (mediaKit.key_achievements && mediaKit.key_achievements.length > 0)) && (
             <section className="py-4">
-              <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight text-center">At-a-Glance</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {atAGlanceStats?.keynoteEngagements && (
-                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
-                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.keynoteEngagements}</p>
-                    <p className="text-md text-slate-600 mt-2">Keynote Engagements</p>
-                  </div>
-                )}
-                {atAGlanceStats?.yearsOfExperience && (
-                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
-                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.yearsOfExperience}</p>
-                    <p className="text-md text-slate-600 mt-2">Years of Experience</p>
-                  </div>
-                )}
-                {atAGlanceStats?.emailSubscribers && (
-                  <div className="bg-slate-50 hover:bg-slate-100 p-6 rounded-xl shadow-lg border border-slate-200 transition-all duration-300">
-                    <p className="text-5xl font-extrabold text-primary filter drop-shadow-sm">{atAGlanceStats.emailSubscribers}</p>
-                    <p className="text-md text-slate-600 mt-2">Email Subscribers</p>
-                  </div>
-                )}
-              </div>
-              {mediaKit.key_achievements && mediaKit.key_achievements.length > 0 && (
-                 <div className="mt-8 bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
-                   <h3 className="text-2xl font-semibold text-slate-700 mb-3 text-center">Key Achievements</h3>
-                   <ul className="list-disc list-inside text-slate-600 space-y-2 marker:text-primary">
-                      {mediaKit.key_achievements.map((achievement, index) => (
-                          <li key={index} className="ml-2">{achievement}</li>
+              <h2 className="text-3xl font-bold text-slate-800 mb-8 tracking-tight text-center">At-a-Glance</h2>
+              
+              {/* Render structured stats if available */}
+              {atAGlanceStats && (atAGlanceStats.keynoteEngagements || atAGlanceStats.yearsOfExperience || atAGlanceStats.emailSubscribers) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  {atAGlanceStats?.keynoteEngagements && (
+                    <Card className="bg-white hover:shadow-lg p-6 rounded-lg border border-slate-200 transition-all duration-300 text-center">
+                      <CardContent className="p-0">
+                        <div className="text-3xl font-bold text-slate-800 mb-2">
+                          {atAGlanceStats.keynoteEngagements}
+                        </div>
+                        <div className="text-base font-medium text-slate-700 mb-1">
+                          Podcast Appearances
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          Keynote Engagements
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {atAGlanceStats?.yearsOfExperience && (
+                    <Card className="bg-white hover:shadow-lg p-6 rounded-lg border border-slate-200 transition-all duration-300 text-center">
+                      <CardContent className="p-0">
+                        <div className="text-3xl font-bold text-slate-800 mb-2">
+                          {atAGlanceStats.yearsOfExperience}
+                        </div>
+                        <div className="text-base font-medium text-slate-700 mb-1">
+                          Years in Remote First Digital Operations
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          Years of Experience
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {atAGlanceStats?.emailSubscribers && (
+                    <Card className="bg-white hover:shadow-lg p-6 rounded-lg border border-slate-200 transition-all duration-300 text-center">
+                      <CardContent className="p-0">
+                        <div className="text-3xl font-bold text-slate-800 mb-2">
+                          {atAGlanceStats.emailSubscribers}
+                        </div>
+                        <div className="text-base font-medium text-slate-700 mb-1">
+                          AI Automation Email Newsletter Subscribers
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          Email Subscribers
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+              
+              {/* Fallback: Render raw content if structured data is not available */}
+              {!atAGlanceStats && atAGlanceSection?.content && (
+                <div className="mb-8">
+                  {Array.isArray(atAGlanceSection.content) ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {atAGlanceSection.content.map((item: any, index: number) => (
+                        <Card key={index} className="bg-white hover:shadow-lg p-6 rounded-lg border border-slate-200 transition-all duration-300 text-center">
+                          <CardContent className="p-0">
+                            {typeof item === 'object' ? (
+                              <>
+                                <div className="text-3xl font-bold text-slate-800 mb-2">
+                                  {item.value || item.count || item.number || 'N/A'}
+                                </div>
+                                <div className="text-base font-medium text-slate-700 mb-1">
+                                  {item.label || item.title || item.name || 'Stat'}
+                                </div>
+                                {item.description && (
+                                  <div className="text-sm text-slate-500">
+                                    {item.description}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-base text-slate-700">{String(item)}</div>
+                            )}
+                          </CardContent>
+                        </Card>
                       ))}
-                   </ul>
-                 </div>
+                    </div>
+                  ) : typeof atAGlanceSection.content === 'object' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {Object.entries(atAGlanceSection.content).map(([key, value]) => (
+                        <Card key={key} className="bg-white hover:shadow-lg p-6 rounded-lg border border-slate-200 transition-all duration-300 text-center">
+                          <CardContent className="p-0">
+                            <div className="text-3xl font-bold text-slate-800 mb-2">
+                              {String(value)}
+                            </div>
+                            <div className="text-base font-medium text-slate-700">
+                              {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-6 bg-slate-50 rounded-xl">
+                      <div className="text-lg text-slate-700">{String(atAGlanceSection.content)}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {mediaKit.key_achievements && mediaKit.key_achievements.length > 0 && (
+                 <Card className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-xl shadow-lg border border-slate-200">
+                   <CardHeader>
+                     <CardTitle className="text-2xl font-semibold text-slate-700 text-center">Key Achievements</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                     <ul className="list-disc list-inside text-slate-600 space-y-2 marker:text-purple-600">
+                        {mediaKit.key_achievements.map((achievement, index) => (
+                            <li key={index} className="ml-2">{achievement}</li>
+                        ))}
+                     </ul>
+                   </CardContent>
+                 </Card>
               )}
             </section>
           )}
@@ -436,11 +566,17 @@ export default function PublicMediaKitPage() {
                 {mediaKit.talking_points.map((point, index) => (
                   <Card key={index} className="bg-slate-50 border-slate-200 shadow-md hover:shadow-lg transition-shadow">
                     <CardHeader>
-                        <CardTitle className="text-lg text-slate-700" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(point.title) }} />
+                        <CardTitle className="text-lg text-slate-700">
+                          <MarkdownRenderer content={point.title} prose={false} />
+                        </CardTitle>
                     </CardHeader>
                     {point.description && (
                         <CardContent>
-                            <p className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: formatMarkdownBold(point.description) }} />
+                            <MarkdownRenderer 
+                              content={point.description} 
+                              prose={false}
+                              className="text-sm text-slate-600" 
+                            />
                         </CardContent>
                     )}
                   </Card>
@@ -470,10 +606,12 @@ export default function PublicMediaKitPage() {
           {mediaKit.testimonials_section && (
             <section className="py-4">
               <h2 className="text-3xl font-bold text-slate-800 mb-6 tracking-tight">Testimonials</h2>
-              <div 
-                className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 md:p-8 rounded-xl shadow-xl prose prose-lg prose-slate max-w-none leading-relaxed" 
-                dangerouslySetInnerHTML={{ __html: formatMarkdownBold(mediaKit.testimonials_section).replace(/\\n\\*\\s/g, '</ul><ul class="list-disc list-inside mt-2">').replace(/\\*\\s/g, '<li class="mb-1">') }}
-              />
+              <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 md:p-8 rounded-xl shadow-xl">
+                <MarkdownRenderer 
+                  content={mediaKit.testimonials_section}
+                  className="prose-lg"
+                />
+              </div>
             </section>
           )}
           

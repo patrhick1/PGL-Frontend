@@ -1,13 +1,15 @@
 // client/src/pages/ClientCampaigns.tsx
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FolderOpen, ArrowRight, AlertTriangle, TrendingUp } from "lucide-react"; // Added TrendingUp and AlertTriangle
+import { FolderOpen, ArrowRight, AlertTriangle, TrendingUp, Edit2 } from "lucide-react"; // Added Edit2
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
+import EditCampaignDialogClient from "@/components/dialogs/EditCampaignDialogClient";
 
 // Interface for the campaign data expected from the backend
 // This should align with your backend's CampaignInDB schema,
@@ -22,10 +24,15 @@ interface ClientCampaignSummary {
   embedding_status?: string | null;
   active_placements_count?: number;
   pending_approvals_count?: number; // Number of match_suggestions or pitch_reviews pending client approval
+  goal_note?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export default function ClientCampaigns() {
   const { user, isLoading: authLoading } = useAuth();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState<ClientCampaignSummary | null>(null);
 
   // Fetch campaigns for the currently authenticated client
   const { data: campaigns = [], isLoading: campaignsLoading, error } = useQuery<ClientCampaignSummary[]>({
@@ -88,6 +95,11 @@ export default function ClientCampaigns() {
     );
   }
 
+  const handleEditCampaign = (campaign: ClientCampaignSummary) => {
+    setSelectedCampaign(campaign);
+    setEditDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -130,13 +142,25 @@ export default function ClientCampaigns() {
           {campaigns.map((campaign) => (
             <Card key={campaign.campaign_id} className="flex flex-col hover:shadow-lg transition-shadow duration-200">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg truncate" title={campaign.campaign_name}>
-                  {campaign.campaign_name}
-                </CardTitle>
-                <CardDescription className="flex flex-col sm:flex-row sm:justify-between text-xs">
-                  <span>Type: {campaign.campaign_type || "General Outreach"}</span>
-                  <span>Created: {new Date(campaign.created_at).toLocaleDateString()}</span>
-                </CardDescription>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg truncate" title={campaign.campaign_name}>
+                      {campaign.campaign_name}
+                    </CardTitle>
+                    <CardDescription className="flex flex-col sm:flex-row sm:justify-between text-xs mt-1">
+                      <span>Type: {campaign.campaign_type || "General Outreach"}</span>
+                      <span>Created: {new Date(campaign.created_at).toLocaleDateString()}</span>
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditCampaign(campaign)}
+                    className="flex-shrink-0"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="flex-grow flex flex-col justify-between">
                 <div className="space-y-2 mb-4">
@@ -182,6 +206,13 @@ export default function ClientCampaigns() {
           ))}
         </div>
       )}
+      
+      {/* Edit Campaign Dialog */}
+      <EditCampaignDialogClient
+        campaign={selectedCampaign}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 }

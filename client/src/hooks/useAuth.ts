@@ -1,6 +1,6 @@
 // client/src/hooks/useAuth.ts
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn, apiRequest } from "@/lib/queryClient";
 
 interface AuthUser {
   username: string; // This is the email
@@ -22,6 +22,13 @@ interface AuthUser {
   privacy_settings?: Record<string, any> | null;    // Assuming object, adjust if different
 }
 
+interface OAuthProvider {
+  provider: string;
+  connected: boolean;
+  email?: string;
+  is_only_auth_method?: boolean;
+}
+
 export function useAuth() {
   const { data: user, isLoading, error, isSuccess } = useQuery<AuthUser | null>({
     queryKey: ["/auth/me"], // Corrected path to match backend auth.router
@@ -40,4 +47,45 @@ export function useAuth() {
     isAuthenticated: !!user && !error && isSuccess, // Ensure query was successful
     error,
   };
+}
+
+// OAuth-related functions
+export async function getOAuthProviders(): Promise<OAuthProvider[]> {
+  try {
+    const response = await apiRequest("GET", "/auth/oauth/providers");
+    if (!response.ok) {
+      throw new Error("Failed to get OAuth providers");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to get OAuth providers:", error);
+    return [];
+  }
+}
+
+export async function linkOAuthProvider(provider: string): Promise<{ authorization_url: string }> {
+  const response = await apiRequest("POST", `/auth/oauth/${provider}/link`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: "Failed to link provider" }));
+    throw new Error(errorData.detail || "Failed to link provider");
+  }
+  return await response.json();
+}
+
+export async function disconnectOAuthProvider(provider: string, password?: string): Promise<void> {
+  const formData = new FormData();
+  if (password) {
+    formData.append("password", password);
+  }
+  
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/oauth/${provider}/disconnect`, {
+    method: "DELETE",
+    body: formData,
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: "Failed to disconnect provider" }));
+    throw new Error(errorData.detail || "Failed to disconnect provider");
+  }
 }

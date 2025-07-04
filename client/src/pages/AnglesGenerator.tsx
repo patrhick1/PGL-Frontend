@@ -13,13 +13,15 @@ import {
   Lightbulb,
   AlertTriangle,
   Link as LinkIcon, // Renamed to avoid conflict with wouter Link
-  Info
+  Info,
+  Tags
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as appQueryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "wouter"; // For navigation links
+import { KeywordEditor } from "@/components/KeywordEditor";
 
 interface ClientCampaign {
   campaign_id: string;
@@ -53,13 +55,15 @@ interface AnglesBioTriggerResponse {
 interface AnglesGeneratorProps {
   campaignId: string | null;
   onSuccessfulGeneration?: () => void;
+  onKeywordsUpdate?: (keywords: string[]) => void | Promise<void>;
+  isKeywordsUpdateLoading?: boolean;
   // We could also pass a flag like `isQuestionnaireComplete` if ProfileSetup has this readily available
   // to manage the disabled state of the generate button, rather than AnglesGenerator re-fetching campaign details for this.
   // For now, AnglesGenerator will still fetch minimal campaign details to check `mock_interview_trancript`
   // or rely on parent to disable it if questionnaire is not complete.
 }
 
-export default function AnglesGenerator({ campaignId, onSuccessfulGeneration }: AnglesGeneratorProps) {
+export default function AnglesGenerator({ campaignId, onSuccessfulGeneration, onKeywordsUpdate, isKeywordsUpdateLoading }: AnglesGeneratorProps) {
   // Remove local selectedCampaignId and clientCampaigns query as campaignId is now a prop
   // const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [generatedContent, setGeneratedContent] = useState<AnglesBioTriggerResponse['details']>(null);
@@ -177,6 +181,26 @@ export default function AnglesGenerator({ campaignId, onSuccessfulGeneration }: 
 
   return (
     <>
+          {/* How Bio & Angles Generation Works - moved to top for better UX */}
+          <Card className="bg-blue-50 border-blue-200 mb-6">
+            <CardHeader>
+                <CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>How Bio & Angles Generation Works</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-blue-600 space-y-2">
+                <p>1. First, ensure you have selected a campaign and completed its <Link href="/questionnaire" className="font-medium underline hover:text-blue-700">Questionnaire</Link>. This provides the core information (mock interview transcript) our AI needs.</p>
+                <p>2. Once a campaign with a completed questionnaire is selected, click the "Generate Bio & Angles" button.</p>
+                <p>3. Our AI system (<code>AnglesProcessorPG</code> on the backend) will analyze the mock interview transcript and other campaign details.</p>
+                <p>4. It will then generate:</p>
+                <ul className="list-disc list-inside pl-4">
+                    <li>A comprehensive client bio (Full, Summary, Short versions).</li>
+                    <li>A set of at least 10 potential pitch angles (Topic, Outcome, Description).</li>
+                    <li>A list of relevant keywords for the campaign.</li>
+                </ul>
+                <p>5. The generated bio and angles will be saved as new Google Documents, and links to these documents will be stored in the campaign's record in the database. Keywords will also be saved to the campaign.</p>
+                <p>6. You will see links to the generated documents and the keywords on this page after successful generation. The main campaign status will update shortly thereafter.</p>
+            </CardContent>
+          </Card>
+
           {/* Previous content of the component, now inside a fragment */}
           {campaignDetails && (
             <div className="p-3 border rounded-md bg-gray-50 text-xs text-gray-600 space-y-1 mb-4">
@@ -251,24 +275,42 @@ export default function AnglesGenerator({ campaignId, onSuccessfulGeneration }: 
           </CardContent>
         </Card>
       )}
-       <Card className="bg-blue-50 border-blue-200 mt-8">
-        <CardHeader>
-            <CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>How Bio & Angles Generation Works</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-600 space-y-2">
-            <p>1. First, ensure you have selected a campaign and completed its <Link href="/questionnaire" className="font-medium underline hover:text-blue-700">Questionnaire</Link>. This provides the core information (mock interview transcript) our AI needs.</p>
-            <p>2. Once a campaign with a completed questionnaire is selected, click the "Generate Bio & Angles" button.</p>
-            <p>3. Our AI system (<code>AnglesProcessorPG</code> on the backend) will analyze the mock interview transcript and other campaign details.</p>
-            <p>4. It will then generate:</p>
-            <ul className="list-disc list-inside pl-4">
-                <li>A comprehensive client bio (Full, Summary, Short versions).</li>
-                <li>A set of at least 10 potential pitch angles (Topic, Outcome, Description).</li>
-                <li>A list of relevant keywords for the campaign.</li>
-            </ul>
-            <p>5. The generated bio and angles will be saved as new Google Documents, and links to these documents will be stored in the campaign's record in the database. Keywords will also be saved to the campaign.</p>
-            <p>6. You will see links to the generated documents and the keywords on this page after successful generation. The main campaign status will update shortly thereafter.</p>
-        </CardContent>
-      </Card>
+
+      {/* Keywords Section */}
+      {campaignDetails && (campaignDetails.campaign_keywords && campaignDetails.campaign_keywords.length > 0) && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Tags className="h-5 w-5" />
+              Keywords Management
+            </CardTitle>
+            <CardDescription>
+              Manage your campaign keywords to improve podcast discovery and matching.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <KeywordEditor
+              keywords={campaignDetails.campaign_keywords}
+              onUpdate={onKeywordsUpdate || (async () => {})}
+              isLoading={isKeywordsUpdateLoading}
+              showGeneratedBadge={true}
+              title="Campaign Discovery Keywords"
+              description="These keywords help us find the most relevant podcasts for your campaign. You can add, edit, or remove keywords to improve matching accuracy."
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Show message if no keywords yet */}
+      {campaignDetails && (!campaignDetails.campaign_keywords || campaignDetails.campaign_keywords.length === 0) && (
+        <Card className="mt-6">
+          <CardContent className="p-6 text-center text-gray-500">
+            <Tags className="mx-auto h-10 w-10 mb-2 text-gray-400"/>
+            <p className="mb-2">No keywords have been generated yet.</p>
+            <p className="text-sm">Generate your Bio & Angles first to create initial keywords.</p>
+          </CardContent>
+        </Card>
+      )}
     </> // Closing the main fragment
   );
 }

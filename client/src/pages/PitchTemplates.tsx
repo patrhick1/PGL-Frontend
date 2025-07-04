@@ -249,6 +249,29 @@ export default function PitchTemplatesPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+      {/* Using Placeholders Instructions - moved to top for better UX */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardHeader><CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>Using Placeholders in Prompt Body</CardTitle></CardHeader>
+        <CardContent className="text-sm text-blue-600 space-y-1">
+            <p>In your "Prompt Body", you can use placeholders that will be dynamically filled with data from the client's campaign and the target media. Examples:</p>
+            <ul className="list-disc list-inside pl-4 space-y-0.5">
+                <li><code>{`{{podcast_name}}`}</code> - Name of the podcast/media.</li>
+                <li><code>{`{{host_name}}`}</code> - Podcast host's name (if available).</li>
+                <li><code>{`{{episode_title}}`}</code> - Title of a relevant episode (if applicable).</li>
+                <li><code>{`{{episode_summary}}`}</code> - Short summary of a relevant episode.</li>
+                <li><code>{`{{ai_summary_of_best_episode}}`}</code> - AI-generated summary of a relevant episode.</li>
+                <li><code>{`{{client_name}}`}</code> - Your client's full name.</li>
+                <li><code>{`{{client_bio_summary}}`}</code> - A summary of your client's bio (from campaign).</li>
+                <li><code>{`{{client_key_talking_point_1}}`}</code>, <code>{`{{client_key_talking_point_2}}`}</code>, etc. - Key talking points.</li>
+                <li><code>{`{{link_to_client_media_kit}}`}</code> - Public URL to the client's media kit.</li>
+                <li><code>{`{{campaign_goal}}`}</code> - The primary goal of the client's campaign.</li>
+                <li><code>{`{{specific_pitch_angle}}`}</code> - A specific angle tailored for this outreach (can be auto-suggested).</li>
+                <li><code>{`{{latest_news_from_podcast}}`}</code> - Recent updates or news about the podcast.</li>
+            </ul>
+            <p className="mt-2">The system will attempt to replace these with actual data before sending the prompt to the AI for final pitch generation. Ensure your placeholders match what the backend expects.</p>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center">
           <FileText className="mr-3 h-6 w-6 text-primary" /> Pitch Templates
@@ -345,27 +368,6 @@ export default function PitchTemplatesPage() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
-       <Card className="bg-blue-50 border-blue-200 mt-4">
-        <CardHeader><CardTitle className="text-blue-700 flex items-center gap-2"><Info className="h-5 w-5"/>Using Placeholders in Prompt Body</CardTitle></CardHeader>
-        <CardContent className="text-sm text-blue-600 space-y-1">
-            <p>In your "Prompt Body", you can use placeholders that will be dynamically filled with data from the client's campaign and the target media. Examples:</p>
-            <ul className="list-disc list-inside pl-4 space-y-0.5">
-                <li><code>{`{{podcast_name}}`}</code> - Name of the podcast/media.</li>
-                <li><code>{`{{host_name}}`}</code> - Podcast host's name (if available).</li>
-                <li><code>{`{{episode_title}}`}</code> - Title of a relevant episode (if applicable).</li>
-                <li><code>{`{{episode_summary}}`}</code> - Short summary of a relevant episode.</li>
-                <li><code>{`{{ai_summary_of_best_episode}}`}</code> - AI-generated summary of a relevant episode.</li>
-                <li><code>{`{{client_name}}`}</code> - Your client's full name.</li>
-                <li><code>{`{{client_bio_summary}}`}</code> - A summary of your client's bio (from campaign).</li>
-                <li><code>{`{{client_key_talking_point_1}}`}</code>, <code>{`{{client_key_talking_point_2}}`}</code>, etc. - Key talking points.</li>
-                <li><code>{`{{link_to_client_media_kit}}`}</code> - Public URL to the client's media kit.</li>
-                <li><code>{`{{campaign_goal}}`}</code> - The primary goal of the client's campaign.</li>
-                <li><code>{`{{specific_pitch_angle}}`}</code> - A specific angle tailored for this outreach (can be auto-suggested).</li>
-                <li><code>{`{{latest_news_from_podcast}}`}</code> - Recent updates or news about the podcast.</li>
-            </ul>
-            <p className="mt-2">The system will attempt to replace these with actual data before sending the prompt to the AI for final pitch generation. Ensure your placeholders match what the backend expects.</p>
         </CardContent>
       </Card>
     </div>
