@@ -9,16 +9,11 @@ import {
   CheckCircle, 
   Clock, 
   TrendingUp, 
-  Search, 
-  Lightbulb, 
   FolderOpen, 
   ClipboardList,
   ArrowUp,
   ArrowRight,
   CalendarPlus,
-  PlayCircle, // For RecentBookingCard
-  Users,
-  ExternalLink, // Added ExternalLink
   Settings // Added Settings icon
 } from "lucide-react";
 import { Link } from "wouter";
@@ -44,17 +39,6 @@ interface RecentPlacementItem {
   client_name?: string | null;
 }
 
-interface RecommendedPodcastItem {
-  media_id: number;
-  name?: string | null;
-  host_names?: string[] | null; // Changed to string array
-  category?: string | null;
-  audience_size?: number | null;
-  description?: string | null;
-  image_url?: string | null;
-  quality_score?: number | null;
-  website?: string | null;
-}
 // --- End Interfaces ---
 
 
@@ -186,59 +170,6 @@ function RecentBookingCard({ booking }: { booking: RecentPlacementItem }) {
   );
 }
 
-function PodcastRecommendationCard({ podcast }: { podcast: RecommendedPodcastItem }) {
-  const getMatchScoreLabel = (score?: number | null) => {
-    if (score === null || typeof score === 'undefined') return { label: "N/A", class: "bg-gray-100 text-gray-700" };
-    if (score >= 80) return { label: "High Match", class: "bg-green-100 text-green-700" };
-    if (score >= 60) return { label: "Good Match", class: "bg-blue-100 text-blue-700" };
-    return { label: "Consider", class: "bg-yellow-100 text-yellow-700" };
-  };
-
-  const matchScore = getMatchScoreLabel(podcast.quality_score);
-
-  return (
-    <Card className="border border-gray-200 hover:border-primary/30 transition-colors card-hover">
-      <CardContent className="p-4">
-        <div className="flex items-start space-x-3 mb-2">
-          <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-            {podcast.image_url ? (
-              <img src={podcast.image_url} alt={podcast.name || 'Podcast'} className="w-full h-full object-cover" />
-            ) : (
-              <PodcastIcon className="h-8 w-8 text-gray-500" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-gray-900 truncate text-sm">{podcast.name || 'N/A'}</h4>
-            <p className="text-xs text-gray-500 truncate">
-              {podcast.host_names && podcast.host_names.length > 0 ? `Host(s): ${podcast.host_names.join(', ')}` : 'Host N/A'}
-            </p>
-             <div className="mt-1">
-                <Badge variant="outline" className="text-xs">{podcast.category || 'N/A'}</Badge>
-            </div>
-          </div>
-        </div>
-        <p className="text-xs text-gray-600 mb-2 line-clamp-2 h-8"> 
-          {podcast.description || "No description available."}
-        </p>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-500">
-            {podcast.audience_size ? `${(podcast.audience_size / 1000).toFixed(0)}K listeners` : 'Audience N/A'}
-          </span>
-          <span className={`px-2 py-0.5 font-medium rounded-full ${matchScore.class}`}>
-            PGL Match Score: {podcast.quality_score ? `${Math.round(podcast.quality_score)}/100` : 'N/A'}
-          </span>
-        </div>
-         {podcast.website && (
-            <Button variant="link" size="sm" asChild className="p-0 h-auto mt-2 text-xs">
-                <a href={podcast.website} target="_blank" rel="noopener noreferrer">
-                    Visit Website <ExternalLink className="ml-1 h-3 w-3"/>
-                </a>
-            </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -254,10 +185,6 @@ export default function Dashboard() {
     enabled: !!user && !authLoading,
   });
 
-  const { data: recommendedPodcasts, isLoading: podcastsLoading, error: podcastsError } = useQuery<RecommendedPodcastItem[]>({
-    queryKey: ["/dashboard/recommended-podcasts", user?.person_id], // User context might influence recommendations
-    enabled: !!user && !authLoading,
-  });
 
   const handleBookDemo = () => {
     window.open("https://calendly.com", "_blank");
@@ -337,7 +264,6 @@ export default function Dashboard() {
             <CardHeader className="border-b"><CardTitle className="text-lg">Quick Actions</CardTitle></CardHeader>
             <CardContent className="p-4 md:p-6">
               <div className="space-y-3">
-                <QuickActionButton title="Discover New Podcasts" icon={Search} href="/discover" colorClass="hover:bg-primary/5" />
                 <QuickActionButton title="My Profile & Content" icon={ClipboardList} href="/profile-setup" colorClass="hover:bg-yellow-500/5" />
                 <QuickActionButton title="Campaign Management" icon={FolderOpen} href="/my-campaigns" colorClass="hover:bg-green-500/5" />
                 <QuickActionButton title="View Settings" icon={Settings} href="/settings" colorClass="hover:bg-teal-500/5" />
@@ -363,37 +289,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recommended Podcasts */}
-      <Card>
-        <CardHeader className="border-b flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Recommended Podcasts</CardTitle>
-          <Link href="/discover">
-            <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
-              View All <ArrowRight className="ml-1 h-3 w-3"/>
-            </Button>
-          </Link>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6">
-          {podcastsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 w-full rounded-lg" />)}
-            </div>
-          ) : podcastsError ? (
-            <p className="text-sm text-red-500 text-center py-4">Failed to load recommended podcasts.</p>
-          ) : recommendedPodcasts && recommendedPodcasts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {recommendedPodcasts.map((podcast) => (
-                <PodcastRecommendationCard key={podcast.media_id} podcast={podcast} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Search className="mx-auto h-10 w-10 mb-2" />
-              <p className="text-sm">No podcast recommendations available at the moment.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

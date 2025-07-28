@@ -13,9 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Image as ImageIcon, Users, BarChart2, Save, Info, Link as LinkIcon, Camera } from 'lucide-react';
+import { ExternalLink, Image as ImageIcon, Users, BarChart2, Save, Info, Link as LinkIcon, Camera, Edit } from 'lucide-react';
 import { Link as RouterLink } from 'wouter';
 import { ImageUpload } from '@/components/ImageUpload';
+import { MediaKitEditor } from '@/components/MediaKitEditor';
 
 // --- Zod Schema for Editable Media Kit Content (MediaKitEditableContentSchema) ---
 const mediaKitEditableContentSchema = z.object({
@@ -78,6 +79,7 @@ interface MediaKitTabProps {
 export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
+  const [showInlineEditor, setShowInlineEditor] = useState(false);
 
   const { data: mediaKitData, isLoading: isLoadingMediaKit, error: mediaKitError, refetch: refetchMediaKit } = useQuery<MediaKitData>({
     queryKey: ["/campaigns/", campaignId, "/media-kit"],
@@ -127,15 +129,39 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
   const upsertMediaKitMutation = useMutation({
     mutationFn: async (formData: MediaKitEditableFormData) => {
       if (!campaignId) throw new Error("Campaign ID is required.");
-      const response = await apiRequest("POST", `/campaigns/${campaignId}/media-kit`, formData);
+      
+      // Determine if we're creating or updating
+      const isUpdate = !!mediaKitData;
+      const method = isUpdate ? "PATCH" : "POST";
+      const endpoint = isUpdate 
+        ? `/campaigns/${campaignId}/media-kit/settings`
+        : `/campaigns/${campaignId}/media-kit`;
+      
+      console.log(`Sending ${method} request to:`, endpoint);
+      console.log('Request body:', JSON.stringify(formData, null, 2));
+      console.log('Is update?', isUpdate);
+      
+      const response = await apiRequest(method, endpoint, formData);
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Failed to save media kit." }));
+        console.error('Error response:', errorData);
         throw new Error(errorData.detail);
       }
-      return response.json();
+      
+      const responseData = await response.json();
+      console.log('Success response:', responseData);
+      return responseData;
     },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Media kit saved successfully!" });
+    onSuccess: (data, variables) => {
+      const isUpdate = !!mediaKitData;
+      toast({ 
+        title: "Success", 
+        description: isUpdate ? "Media kit settings updated successfully!" : "Media kit created successfully!" 
+      });
       tanstackQueryClient.invalidateQueries({ queryKey: ["/campaigns/", campaignId, "/media-kit"] });
       // Potentially invalidate general campaign list if it shows media kit status
       tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage"] }); 
@@ -146,6 +172,9 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
   });
 
   const handleFormSubmit = (data: MediaKitEditableFormData) => {
+    console.log('MediaKit Form Submission Data:', data);
+    console.log('Campaign ID:', campaignId);
+    console.log('API Endpoint:', `/campaigns/${campaignId}/media-kit`);
     upsertMediaKitMutation.mutate(data);
   };
 
@@ -242,11 +271,21 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Generated & Sourced Content</CardTitle>
-                {mediaKitData.is_public && mediaKitData.slug && (
-                    <a href={`/media-kit/${mediaKitData.slug}`} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="sm"><ExternalLink className="h-3 w-3 mr-1.5"/> View Public Media Kit</Button>
-                    </a>
-                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowInlineEditor(!showInlineEditor)}
+                  >
+                    <Edit className="h-3 w-3 mr-1.5"/> 
+                    {showInlineEditor ? 'Hide Editor' : 'Edit Content'}
+                  </Button>
+                  {mediaKitData.is_public && mediaKitData.slug && (
+                      <a href={`/media-kit/${mediaKitData.slug}`} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm"><ExternalLink className="h-3 w-3 mr-1.5"/> View Public Media Kit</Button>
+                      </a>
+                  )}
+                </div>
               </div>
               <CardDescription>This content is automatically derived from your campaign questionnaire or GDocs. Edit those sources to update this section.</CardDescription>
             </CardHeader>
@@ -282,6 +321,21 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
               {/* Optional: Display Image URLs and Social Stats if needed in this view */}
             </CardContent>
           </Card>
+
+          {/* Inline Media Kit Editor */}
+          {showInlineEditor && (
+            <MediaKitEditor
+              mediaKit={mediaKitData}
+              isOwner={true}
+              onSave={() => {
+                refetchMediaKit();
+                toast({
+                  title: "Success",
+                  description: "Media kit updated successfully!",
+                });
+              }}
+            />
+          )}
         </>
       )}
       {!mediaKitData && !isLoadingMediaKit && (
@@ -289,10 +343,7 @@ export default function MediaKitTab({ campaignId }: MediaKitTabProps) {
               <CardContent className="pt-6 text-center">
                   <Info className="mx-auto h-10 w-10 text-gray-400 mb-3" />
                   <p className="text-lg font-medium text-gray-700">Media Kit Not Yet Created</p>
-                  <p className="text-sm text-gray-500 mb-3">Fill in and save the editable fields above to generate your media kit.</p>
-                  <Button onClick={() => mediaKitForm.handleSubmit(handleFormSubmit)()} disabled={upsertMediaKitMutation.isPending}>
-                      <Save className="mr-2 h-4 w-4" /> Create Initial Media Kit
-                  </Button>
+                  <p className="text-sm text-gray-500">Fill in and save the editable fields above to generate your media kit.</p>
               </CardContent>
           </Card>
       )}

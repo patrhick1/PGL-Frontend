@@ -33,7 +33,7 @@ interface ConversationState {
   extractedData: any;
 }
 
-export function useConversation(campaignId: string) {
+export function useConversation(campaignId: string, isOnboarding: boolean = false) {
   const { toast } = useToast();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,6 +42,39 @@ export function useConversation(campaignId: string) {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [lastSaveTime, setLastSaveTime] = useState(Date.now());
   const [keywordsCount, setKeywordsCount] = useState(0);
+  const [isConversationComplete, setIsConversationComplete] = useState(false);
+
+  // Check for completed conversations first (only in onboarding mode)
+  const { data: completedConversation, isLoading: isCheckingCompleted } = useQuery({
+    queryKey: ['completed-conversation', campaignId],
+    queryFn: async () => {
+      if (!isOnboarding) return null;
+      
+      console.log('Checking for completed conversation for campaign:', campaignId);
+      try {
+        const response = await apiRequest('GET', `/campaigns/${campaignId}/chatbot/latest-completed`);
+        console.log('Completed conversation response status:', response.status);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.log('No completed conversation found');
+            return null;
+          }
+          console.error('Failed to fetch completed conversation:', response.status);
+          return null;
+        }
+        
+        const data = await response.json();
+        console.log('Completed conversation found:', data);
+        return data;
+      } catch (error) {
+        console.error('Error fetching completed conversation:', error);
+        return null;
+      }
+    },
+    retry: 1,
+    enabled: !!campaignId && isOnboarding,
+  });
 
   // Check for latest resumable conversation
   const { data: latestConversation, isLoading: isCheckingLatest } = useQuery({
@@ -73,9 +106,23 @@ export function useConversation(campaignId: string) {
     enabled: !!campaignId,
   });
 
-  // Initialize with latest resumable conversation if available
+  // Initialize with completed or resumable conversation based on mode
   useEffect(() => {
-    // Don't do anything while checking
+    // For onboarding, check completed conversations first
+    if (isOnboarding && isCheckingCompleted) {
+      console.log('Still checking for completed conversation...');
+      return;
+    }
+    
+    if (isOnboarding && completedConversation?.found) {
+      console.log('Found completed conversation in onboarding:', completedConversation);
+      setIsConversationComplete(true);
+      setConnectionStatus('connected');
+      // Don't try to start or resume, just mark as complete
+      return;
+    }
+    
+    // If not onboarding or no completed conversation found, check for resumable
     if (isCheckingLatest) {
       console.log('Still checking for latest conversation...');
       return;
@@ -83,14 +130,22 @@ export function useConversation(campaignId: string) {
     
     if (latestConversation) {
       console.log('Found resumable conversation:', latestConversation);
+      // Check if conversation is already complete
+      if (latestConversation.is_complete) {
+        console.log('Latest conversation is already complete, not resuming');
+        setIsConversationComplete(true);
+        setConnectionStatus('connected');
+        // Don't try to resume a completed conversation
+        return;
+      }
       // Automatically resume the latest conversation
-      resumeConversation.mutate();
+      resumeConversation.mutate(latestConversation.conversation_id);
     } else {
       console.log('No resumable conversation found, ready to start new');
       // No existing conversations
       setConnectionStatus('connected');
     }
-  }, [latestConversation, isCheckingLatest]);
+  }, [latestConversation, isCheckingLatest, completedConversation, isCheckingCompleted, isOnboarding]);
 
   // Start new conversation
   const startConversation = useMutation({
@@ -115,7 +170,7 @@ export function useConversation(campaignId: string) {
       // Add initial bot message
       const welcomeMessage: Message = {
         id: `bot-${Date.now()}`,
-        text: data.initial_message || "Hi! I'm here to help you create an amazing podcast guest profile. Let's start with your name - what should I call you?",
+        text: data.initial_message || "Hi! I'm here to help you create an amazing podcast guest profile. Don't worry about getting everything perfect - you'll be able to edit your media kit after I generate it for you. Let's start with your name - what should I call you?",
         sender: 'bot',
         timestamp: new Date()
       };
@@ -159,6 +214,11 @@ export function useConversation(campaignId: string) {
       });
       
       if (!response.ok) {
+        if (response.status === 404) {
+          // Conversation not found - likely completed
+          const errorData = await response.json().catch(() => ({ detail: 'Conversation not found' }));
+          throw new Error(`404: ${errorData.detail || 'Conversation not found'}`);
+        }
         throw new Error('Failed to send message');
       }
       
@@ -182,6 +242,13 @@ export function useConversation(campaignId: string) {
       }
       if (data.phase) {
         setPhase(data.phase);
+      }
+      
+      // Check if the conversation is ready for completion
+      if (data.ready_for_completion === true) {
+        console.log('Backend indicates conversation is ready for completion');
+        // Return this flag so the component can handle it
+        data._readyForCompletion = true;
       }
       
       // Track keywords and extracted data
@@ -208,8 +275,15 @@ export function useConversation(campaignId: string) {
       if (shouldAutoSave) {
         autoSaveConversation();
       }
+      
+      // Return the data so it can be used in the component (including ready_for_completion flag)
+      return data;
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Don't show toast for 404 errors - handled in component
+      if (error?.message?.includes('404')) {
+        return;
+      }
       toast({
         title: "Message Error",
         description: "Failed to send message. Please try again.",
@@ -231,6 +305,21 @@ export function useConversation(campaignId: string) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Failed to resume conversation:', response.status, errorText);
+        
+        // Check if error is due to conversation being complete
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.detail?.includes('already complete') || errorData.detail?.includes('has been completed')) {
+            throw new Error('CONVERSATION_ALREADY_COMPLETE');
+          }
+        } catch (e: any) {
+          // If not the specific error, throw generic error
+          if (e.message !== 'CONVERSATION_ALREADY_COMPLETE') {
+            throw new Error('Failed to resume conversation');
+          }
+          throw e;
+        }
+        
         throw new Error('Failed to resume conversation');
       }
       
@@ -239,6 +328,16 @@ export function useConversation(campaignId: string) {
     onSuccess: (data) => {
       if (data) {
         console.log('Conversation resumed successfully:', data);
+        
+        // Check if conversation is marked as complete
+        if (data.is_complete) {
+          console.log('Conversation is marked as complete');
+          setIsConversationComplete(true);
+          setConnectionStatus('connected');
+          // Don't load messages for a completed conversation
+          return;
+        }
+        
         setConversationId(data.conversation_id);
         
         // Messages are already in the correct format from backend
@@ -282,8 +381,18 @@ export function useConversation(campaignId: string) {
         console.log(`Loaded ${formattedMessages.length} messages, progress: ${data.progress}%`);
       }
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Failed to resume conversation:', error);
+      
+      // Handle specific error for completed conversations
+      if (error.message === 'CONVERSATION_ALREADY_COMPLETE') {
+        console.log('Conversation is already complete, cannot resume');
+        setIsConversationComplete(true);
+        setConnectionStatus('connected');
+        // Don't show error toast for completed conversations
+        return;
+      }
+      
       setConnectionStatus('connected'); // Still set to connected to allow new conversation
       toast({
         title: "Resume Failed",
@@ -382,6 +491,7 @@ export function useConversation(campaignId: string) {
     pauseConversation,
     getSummary,
     isLoading: sendMessage.isPending || startConversation.isPending || completeConversation.isPending || pauseConversation.isPending,
-    connectionStatus
+    connectionStatus,
+    isConversationComplete
   };
 }

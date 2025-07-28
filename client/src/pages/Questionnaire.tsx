@@ -130,9 +130,10 @@ const sections = [
 interface QuestionnaireProps {
   campaignId: string | null;
   onSuccessfulSubmit?: () => void;
+  isOnboarding?: boolean;
 }
 
-export default function Questionnaire({ campaignId, onSuccessfulSubmit }: QuestionnaireProps) {
+export default function Questionnaire({ campaignId, onSuccessfulSubmit, isOnboarding = false }: QuestionnaireProps) {
   const { toast } = useToast();
   const tanstackQueryClient = useTanstackQueryClient();
   const { user, isLoading: authLoading } = useAuth();
@@ -413,12 +414,42 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
 
   // Handle chat completion
   const handleChatComplete = (data: any) => {
-    // Convert chat data to questionnaire format and save
-    submitMutation.mutate(data);
+    // The chat conversation has been completed and submitted through the backend
+    // Now we need to refresh the questionnaire data and notify the parent
+    tanstackQueryClient.invalidateQueries({ queryKey: ["campaignQuestionnaireData", campaignId] });
+    tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaigns", user?.person_id] });
+    tanstackQueryClient.invalidateQueries({ queryKey: ["clientCampaignsForProfileSetupPage", user?.person_id] });
+    
+    toast({ 
+      title: "Success!", 
+      description: "Your interview has been completed and your media kit is being generated." 
+    });
+    
+    // Notify parent component if callback provided
+    if (onSuccessfulSubmit) {
+      onSuccessfulSubmit();
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* Edit Later Notice */}
+      <Card className="bg-blue-50 border-blue-200 mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-start space-x-3">
+            <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-blue-900">
+                Don't worry about getting everything perfect!
+              </p>
+              <p className="text-sm text-blue-700">
+                After our AI generates your media kit, you'll be able to edit and refine all content including your bio, talking points, and other details. Just provide your best answers now, and polish it later.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Mode Toggle */}
       <Card>
         <CardHeader>
@@ -432,7 +463,7 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
             <ToggleGroup type="single" value={mode} onValueChange={(value) => value && setMode(value as 'form' | 'chat')}>
               <ToggleGroupItem value="form" aria-label="Form mode">
                 <FileText className="mr-2 h-4 w-4" />
-                Traditional Form
+                Questionnaire
               </ToggleGroupItem>
               <ToggleGroupItem value="chat" aria-label="Chat mode">
                 <MessageSquare className="mr-2 h-4 w-4" />
@@ -446,10 +477,30 @@ export default function Questionnaire({ campaignId, onSuccessfulSubmit }: Questi
 
       {/* Show chat interface if chat mode is selected */}
       {mode === 'chat' ? (
-        <ChatInterface 
-          campaignId={campaignId} 
-          onComplete={handleChatComplete}
-        />
+        <div className="space-y-4">
+          {/* Chat Mode Info */}
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-6">
+              <div className="flex items-start space-x-3">
+                <MessageSquare className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-green-900">
+                    Chat with our AI assistant to create your media kit
+                  </p>
+                  <p className="text-sm text-green-700">
+                    Just have a natural conversation! The AI will guide you through the process. Remember, you can edit everything in your media kit after it's generated, so don't stress about perfect answers.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <ChatInterface 
+            campaignId={campaignId} 
+            onComplete={handleChatComplete}
+            isOnboarding={isOnboarding}
+          />
+        </div>
       ) : (
         <>
           {/* Welcome Section - only show on first load */}

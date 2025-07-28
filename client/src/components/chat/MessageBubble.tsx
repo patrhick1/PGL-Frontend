@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Bot, User } from 'lucide-react';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 
 interface Message {
   id?: string;
@@ -39,7 +40,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : "bg-muted"
         )}
       >
-        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+        {isUser ? (
+          <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+        ) : (
+          <div className="text-sm">
+            <MarkdownRenderer 
+              content={message.text} 
+              prose={false}
+              className="[&>*:last-child]:mb-0"
+            />
+          </div>
+        )}
         <time className={cn(
           "text-xs mt-1 block",
           isUser ? "text-primary-foreground/70" : "text-muted-foreground"

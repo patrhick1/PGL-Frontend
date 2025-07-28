@@ -41,8 +41,7 @@ const clientNavigationItems: NavigationItem[] = [
   { name: "Guest Profile Setup", href: "/profile-setup", icon: ClipboardList, roles: ['client'] },
   { name: "My Campaigns", href: "/my-campaigns", icon: FolderOpen, roles: ['client'] },
   { name: "Approve Matches", href: "/approvals", icon: CheckCircle, roles: ['client'] }, // Approvals page will filter for clients
-  { name: "Track Placements", href: "/placement-tracking", icon: TrendingUp, roles: ['client'] },
-  { name: "Discover Podcasts", href: "/discover", icon: Search, roles: ['client'] }, // Client's limited discovery
+  { name: "Track Placements", href: "/placement-tracking", icon: TrendingUp, roles: ['client'] }
 ];
 
 // --- INTERNAL STAFF/ADMIN NAVIGATION ---

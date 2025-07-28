@@ -1,5 +1,5 @@
 // client/src/pages/PublicMediaKitPage.tsx
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter"; // To get the :slug from the URL
 import { apiRequest } from "@/lib/queryClient";
@@ -14,10 +14,13 @@ import {
   Link2, Mail, Phone, MapPin, Twitter, Linkedin, Instagram, Facebook, Youtube, ExternalLink, AlertTriangle, Mic, Sparkles, CheckCircle, ListChecks, Star,
   User, // Added User icon
   ArrowRight, // Added ArrowRight icon
+  Edit, // Added Edit icon
 } from "lucide-react";
 import NotFound from "./not-found"; // Assuming you have a 404 component
 import { Link as RouterLink } from "wouter"; // Added for CTA button
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { MediaKitEditor } from "@/components/MediaKitEditor";
+import { useAuth } from "@/hooks/useAuth";
 
 // Interface for the data expected from GET /public/media-kit/{slug}
 interface PublicMediaKitData {
@@ -74,6 +77,7 @@ interface PublicMediaKitData {
   logo_image_url?: string | null; // Could be client's company or personal logo
 
   call_to_action_text?: string | null; // Custom text for the main CTA button
+  call_to_action_url?: string | null; // Custom URL for the CTA button
   contact_information_for_booking?: string | null; // JSON string with contact details
   
   // Client-specific information (often from the Person model)
@@ -150,6 +154,8 @@ const getMainBio = (fullBio?: string | null): string => {
 export default function PublicMediaKitPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
+  const { user } = useAuth();
+  const [showEditor, setShowEditor] = useState(false);
 
   const { data: mediaKit, isLoading, error, isError } = useQuery<PublicMediaKitData | null>({
     queryKey: ["publicMediaKit", slug],
@@ -368,6 +374,33 @@ export default function PublicMediaKitPage() {
 
       <main className="max-w-5xl mx-auto py-10 md:py-16 px-4 sm:px-6 lg:px-8 bg-white -mt-12 md:-mt-20 rounded-t-xl shadow-2xl">
         <div className="space-y-12 md:space-y-16 p-4 md:p-6">
+          {/* Owner Edit Button */}
+          {user && user.person_id === mediaKit.person_id && (
+            <div className="flex justify-end mb-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowEditor(!showEditor)}
+                className="gap-2"
+              >
+                <Edit className="h-4 w-4" />
+                {showEditor ? 'Close Editor' : 'Edit Media Kit'}
+              </Button>
+            </div>
+          )}
+
+          {/* Media Kit Editor */}
+          {showEditor && user && user.person_id === mediaKit.person_id && (
+            <div className="mb-8 border-2 border-primary/20 rounded-lg p-6 bg-gray-50">
+              <MediaKitEditor
+                mediaKit={mediaKit as any}
+                isOwner={true}
+                onSave={() => {
+                  // Refetch the media kit data
+                  window.location.reload();
+                }}
+              />
+            </div>
+          )}
           {mediaKit.full_bio_content && (
             <section className="py-4">
               <h2 className="text-3xl font-bold text-slate-800 mb-5 tracking-tight">About {mediaKit.client_full_name && mediaKit.client_full_name.split(' ')[0]}</h2>
@@ -615,7 +648,7 @@ export default function PublicMediaKitPage() {
             </section>
           )}
           
-          {(bookingInfo.booking_email || bookingInfo.website || mediaKit.call_to_action_text) && (
+          {(bookingInfo.booking_email || bookingInfo.website || mediaKit.call_to_action_text || mediaKit.call_to_action_url) && (
             <section className="text-center py-10 md:py-12 bg-slate-800 rounded-xl my-8 shadow-2xl">
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 px-4">
                 {mediaKit.call_to_action_text || `Interested in Booking ${mediaKit.client_full_name && mediaKit.client_full_name.split(' ')[0] || "This Guest"}?`}
@@ -626,9 +659,13 @@ export default function PublicMediaKitPage() {
               <Button 
                 size="lg" 
                 className="bg-white hover:bg-slate-200 text-slate-800 font-semibold px-12 py-4 text-lg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300"
-                asChild={!!(bookingInfo.website || bookingInfo.booking_email)}
+                asChild={!!(mediaKit.call_to_action_url || bookingInfo.website || bookingInfo.booking_email)}
               >
-                {bookingInfo.website ? (
+                {mediaKit.call_to_action_url ? (
+                  <a href={mediaKit.call_to_action_url.startsWith('http') ? mediaKit.call_to_action_url : `https://${mediaKit.call_to_action_url}`} target="_blank" rel="noopener noreferrer">
+                    {mediaKit.call_to_action_text || "Book Now"} <ExternalLink className="ml-2 h-5 w-5"/>
+                  </a>
+                ) : bookingInfo.website ? (
                   <a href={bookingInfo.website.startsWith('http') ? bookingInfo.website : `https://${bookingInfo.website}`} target="_blank" rel="noopener noreferrer">
                     Visit Website <ExternalLink className="ml-2 h-5 w-5"/>
                   </a>

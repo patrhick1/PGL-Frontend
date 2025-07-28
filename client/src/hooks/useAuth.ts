@@ -7,6 +7,9 @@ interface AuthUser {
   role: string | null;
   person_id: number | null; // Changed from optional to match backend session data more closely
   full_name: string | null; // Changed from optional
+  // Onboarding status
+  onboarding_completed?: boolean;
+  onboarding_completed_at?: string | null;
   // Fields from Person schema / settings page
   bio?: string | null;
   website?: string | null;
@@ -32,7 +35,19 @@ interface OAuthProvider {
 export function useAuth() {
   const { data: user, isLoading, error, isSuccess } = useQuery<AuthUser | null>({
     queryKey: ["/auth/me"], // Corrected path to match backend auth.router
-    queryFn: getQueryFn<AuthUser | null>({ on401: "returnNull" }), 
+    queryFn: async (context) => {
+      try {
+        const result = await getQueryFn<AuthUser | null>({ on401: "returnNull" })(context);
+        return result;
+      } catch (err: any) {
+        // Handle 404 errors gracefully - treat as not authenticated
+        if (err?.status === 404) {
+          console.warn('Auth endpoint not found, treating as unauthenticated');
+          return null;
+        }
+        throw err;
+      }
+    },
     retry: false,
     staleTime: 1000 * 60 * 5, 
     refetchOnWindowFocus: true,

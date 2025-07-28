@@ -1,5 +1,5 @@
 // client/src/App.tsx
-import { Switch, Route, Redirect } from "wouter"; // Added Redirect
+import { Switch, Route, Redirect, useLocation } from "wouter"; // Added Redirect and useLocation
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -36,6 +36,8 @@ import SignupPage from "@/pages/Signup";
 import LeadMagnetQuestionnaire from "@/pages/LeadMagnetQuestionnaire"; // Added for Lead Magnet
 import PublicMediaKitPage from "@/pages/PublicMediaKitPage"; // Added for public media kit viewing
 import ResetPasswordPage from "@/pages/ResetPassword"; // Added for password reset
+import Onboarding from "@/pages/Onboarding"; // Added for onboarding flow
+import EmailVerification from "@/pages/EmailVerification"; // Added for email verification
 
 
 function Router() {
@@ -55,6 +57,8 @@ function Router() {
     <Switch> {/* Outer Switch for auth state */}
       {/* Public routes accessible to everyone */}
       <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Public media kit route - accessible to all users */}
+      <Route path="/onboarding" component={Onboarding} /> {/* Onboarding route - token-based auth */}
+      <Route path="/verify-email" component={EmailVerification} /> {/* Email verification route */}
       
       {!isAuthenticated ? (
         <>

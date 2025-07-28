@@ -32,6 +32,25 @@ export default function Landing() {
     // Check for OAuth errors in URL params
     const oauthError = queryParams.get("error");
     const linkedProvider = queryParams.get("linked");
+    const message = queryParams.get("message");
+    
+    // Handle success messages
+    if (message === "email-verified") {
+      toast({
+        title: "Email Verified! ✅",
+        description: "Your email has been verified. You can now log in.",
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (message === "onboarding-link-expired") {
+      toast({
+        title: "Link Expired",
+        description: "Your onboarding link has expired. Please log in to continue.",
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     
     if (oauthError) {
       if (oauthError === "oauth_failed") {
