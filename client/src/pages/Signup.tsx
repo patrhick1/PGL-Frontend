@@ -71,18 +71,22 @@ export default function SignupPage() {
 
       // Show success message based on whether this was a lead magnet conversion
       const isLeadMagnetConversion = prospectPersonId && prospectCampaignId;
-      toast({ 
-        title: "Signup Successful", 
-        description: isLeadMagnetConversion 
-          ? "Your account has been created! You can now access your personalized campaign." 
-          : "Please log in with your new account." 
-      });
-
-      // For lead magnet conversions, redirect to profile setup with the campaign
-      if (isLeadMagnetConversion && responseData.campaign_id) {
+      
+      if (isLeadMagnetConversion) {
+        toast({ 
+          title: "Signup Successful", 
+          description: "Your account has been created! You can now access your personalized campaign."
+        });
+        // For lead magnet conversions, redirect to profile setup with the campaign
         navigate(`/login?redirect=/profile-setup&campaignId=${responseData.campaign_id}`);
       } else {
-        navigate("/login");
+        // For regular signups, show email verification message
+        toast({ 
+          title: "Account Created Successfully! 📧", 
+          description: "Please check your email to verify your account. After verification, you'll receive an onboarding email to set up your profile.",
+          duration: 8000 // Keep it visible longer
+        });
+        navigate("/login?message=check-email");
       }
 
     } catch (error: any) {

@@ -17,6 +17,9 @@ import {
   Target,
   Mail
 } from "lucide-react";
+import logoName from "@/img/PGL logo name.png";
+import logoIcon from "@/img/Podcast Guest Launch Logo.png";
+import peopleConversing from "@/img/people conversing.png";
 
 export default function Home() {
   const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
@@ -33,11 +36,8 @@ export default function Home() {
       <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-sm z-50 border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg flex items-center justify-center">
-                <Mic className="text-white h-5 w-5" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">PodcastGuestLaunch</span>
+            <div className="flex items-center">
+              <img src={logoName} alt="Podcast Guest Launch" className="h-10" />
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/login">
@@ -56,8 +56,11 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-24 pb-20 bg-gradient-to-b from-indigo-600 to-indigo-800 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section className="pt-24 pb-20 bg-gradient-to-b from-indigo-600 to-indigo-800 text-white relative overflow-hidden">
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-10">
+          <img src={logoIcon} alt="" className="h-96 w-96" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
               Land High-Impact Podcast Interviews — Without Cold Outreach
@@ -83,6 +86,48 @@ export default function Home() {
             <p className="mt-6 text-sm text-indigo-200">
               No credit card required • 7-day free trial • Cancel anytime
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Simple 3-Step Process */}
+      <section className="py-16 bg-gradient-to-r from-indigo-50 to-purple-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              It's Really This Simple
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-3xl font-bold text-white">1</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Tell Us Your Story</h3>
+              <p className="text-gray-600">Share your expertise and what makes you unique</p>
+            </div>
+            <div className="text-center">
+              <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-3xl font-bold text-white">2</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Approve Podcasts</h3>
+              <p className="text-gray-600">We find shows, you pick which ones to pitch</p>
+            </div>
+            <div className="text-center">
+              <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-3xl font-bold text-white">3</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Get Famous</h3>
+              <p className="text-gray-600">Show up, shine, and grow your influence</p>
+            </div>
+          </div>
+          <div className="text-center mt-10">
+            <Link href="/signup">
+              <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-6 text-lg shadow-lg">
+                Get Started Today
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -201,8 +246,11 @@ export default function Home() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="how-it-works" className="py-20 bg-gray-50 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-5">
+          <img src={peopleConversing} alt="" className="w-full h-full object-cover object-center" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               How It Works
@@ -460,11 +508,8 @@ export default function Home() {
       <footer className="py-12 bg-gray-900 text-gray-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <Mic className="text-white h-5 w-5" />
-              </div>
-              <span className="text-xl font-bold text-white">PodcastGuestLaunch</span>
+            <div className="flex items-center mb-4 md:mb-0">
+              <img src={logoName} alt="Podcast Guest Launch" className="h-10 brightness-0 invert" />
             </div>
             <div className="flex space-x-6 text-sm">
               <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>

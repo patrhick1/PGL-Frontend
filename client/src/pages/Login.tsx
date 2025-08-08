@@ -42,6 +42,22 @@ export default function Landing() {
       });
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (message === "check-email") {
+      toast({
+        title: "Check Your Email 📧",
+        description: "We've sent you a verification email. Please verify your account to continue.",
+        duration: 8000
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (message === "google-signup-success") {
+      toast({
+        title: "Welcome to PGL! 🎉",
+        description: "Your account has been created. Check your email for an onboarding link to set up your profile.",
+        duration: 8000
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     } else if (message === "onboarding-link-expired") {
       toast({
         title: "Link Expired",
