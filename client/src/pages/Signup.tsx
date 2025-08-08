@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mic, UserPlus, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Eye, EyeOff } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import logoName from "@/img/PGL logo name.png";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -131,17 +132,15 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'hsl(var(--primary))' }}>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-indigo-800">
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <Card className="shadow-2xl">
             <CardContent className="p-8">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Mic className="text-primary text-2xl h-8 w-8" />
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-                <p className="text-gray-600">Join PGL CRM</p>
+                <img src={logoName} alt="Podcast Guest Launch" className="h-12 mx-auto mb-4" />
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Create Your Account</h1>
+                <p className="text-gray-600">Join thousands getting booked on podcasts</p>
               </div>
 
               <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-6">

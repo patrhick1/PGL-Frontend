@@ -5,11 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Mic, LogIn, Mail, Eye, EyeOff } from "lucide-react";
+import { LogIn, Mail, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, Link } from "wouter"; // Added Link
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient"; // appQueryClient is not needed, use queryClient directly
+import logoName from "@/img/PGL logo name.png";
 
 export default function Landing() {
   const [email, setEmail] = useState("");
@@ -231,17 +232,15 @@ export default function Landing() {
 
   return (
     <>
-      <div className="min-h-screen" style={{ background: 'hsl(var(--primary))' }}> {/* Use theme color */}
+      <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-indigo-800">
         <div className="min-h-screen flex items-center justify-center p-4">
           <div className="max-w-md w-full">
             <Card className="shadow-2xl">
               <CardContent className="p-8">
                 <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Mic className="text-primary text-2xl h-8 w-8" />
-                  </div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">PGL CRM</h1>
-                  <p className="text-gray-600">Professional Podcast Booking System</p>
+                  <img src={logoName} alt="Podcast Guest Launch" className="h-12 mx-auto mb-4" />
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
+                  <p className="text-gray-600">Sign in to your account</p>
                 </div>
 
                 <form onSubmit={handleSignIn} className="space-y-6">

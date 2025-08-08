@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mic, KeyRound, Eye, EyeOff } from "lucide-react";
+import { KeyRound, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import logoName from "@/img/PGL logo name.png";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -105,23 +106,21 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'hsl(var(--primary))' }}>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-indigo-800">
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <Card className="shadow-2xl">
             <CardContent className="p-8">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <KeyRound className="text-primary text-2xl h-8 w-8" />
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset Your Password</h1>
+                <img src={logoName} alt="Podcast Guest Launch" className="h-12 mx-auto mb-4" />
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset Your Password</h1>
                 <p className="text-gray-600">Enter your new password below</p>
               </div>
 
               {isSuccess ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Mic className="text-green-600 text-2xl h-8 w-8" />
+                    <CheckCircle2 className="text-green-600 text-2xl h-8 w-8" />
                   </div>
                   <h2 className="text-xl font-semibold text-gray-900">Password Reset Successful!</h2>
                   <p className="text-gray-600">Your password has been updated. You will be redirected to the login page shortly.</p>
