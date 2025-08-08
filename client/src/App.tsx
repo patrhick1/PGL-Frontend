@@ -6,7 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import Home from "@/pages/Home";
 import Layout from "@/components/Layout"; // Your main app layout with Sidebar and Header
 
 // --- Page Imports ---
@@ -62,14 +63,14 @@ function Router() {
       
       {!isAuthenticated ? (
         <>
-          <Route path="/" component={Landing} />
-          <Route path="/login" component={Landing} />
+          <Route path="/" component={Home} />
+          <Route path="/login" component={Login} />
           <Route path="/signup" component={SignupPage} />
           <Route path="/reset-password" component={ResetPasswordPage} /> {/* Added reset password route */}
           <Route path="/lead-magnet/questionnaire" component={LeadMagnetQuestionnaire} /> {/* Added public route */}
           {/* Redirect any other path to login if not authenticated */}
           <Route>
-            <Redirect to="/login" replace />
+            <Redirect to="/" replace />
           </Route>
         </>
       ) : (
