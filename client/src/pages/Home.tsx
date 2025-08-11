@@ -15,13 +15,60 @@ import {
   Clock,
   Sparkles,
   Target,
-  Mail
+  Mail,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import logoName from "@/img/PGL logo name.png";
 import logoIcon from "@/img/Podcast Guest Launch Logo.png";
 import peopleConversing from "@/img/people conversing.png";
+import { useRef, useState, useEffect } from "react";
+
+// Import testimonial images
+import testimonial1 from "@/PGL Assets/Client Case Studies/Website (1000x800)/1.png";
+import testimonial2 from "@/PGL Assets/Client Case Studies/Website (1000x800)/2.png";
+import testimonial3 from "@/PGL Assets/Client Case Studies/Website (1000x800)/3.png";
+import testimonial4 from "@/PGL Assets/Client Case Studies/Website (1000x800)/4.png";
+import testimonial5 from "@/PGL Assets/Client Case Studies/Website (1000x800)/5.png";
+import testimonial6 from "@/PGL Assets/Client Case Studies/Website (1000x800)/6.png";
 
 export default function Home() {
+  const testimonialRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const testimonialImages = [
+    testimonial1,
+    testimonial2,
+    testimonial3,
+    testimonial4,
+    testimonial5,
+    testimonial6
+  ];
+
+  const scrollTestimonials = (direction: 'left' | 'right') => {
+    if (testimonialRef.current) {
+      const scrollAmount = 400;
+      const currentScroll = testimonialRef.current.scrollLeft;
+      const targetScroll = direction === 'left' 
+        ? currentScroll - scrollAmount 
+        : currentScroll + scrollAmount;
+      
+      testimonialRef.current.scrollTo({
+        left: targetScroll,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const checkScrollButtons = () => {
+    if (testimonialRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = testimonialRef.current;
+      setCanScrollLeft(scrollLeft > 0);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  };
+
   const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
     e.preventDefault();
     const element = document.getElementById(sectionId);
@@ -29,6 +76,13 @@ export default function Home() {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+
+  // Check scroll buttons on mount and resize
+  useEffect(() => {
+    checkScrollButtons();
+    window.addEventListener('resize', checkScrollButtons);
+    return () => window.removeEventListener('resize', checkScrollButtons);
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -327,7 +381,7 @@ export default function Home() {
       </section>
 
       {/* Social Proof */}
-      <section className="py-20">
+      <section className="py-20 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -339,63 +393,77 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="p-6 hover:shadow-lg transition-shadow">
-              <div className="flex mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4">
-                "I landed 5 podcast interviews in my first month — my email list grew by 
-                1,200 subscribers. The ROI is incredible."
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-gray-200 rounded-full mr-3"></div>
-                <div>
-                  <p className="font-semibold text-gray-900">Sarah L.</p>
-                  <p className="text-sm text-gray-600">Business Coach</p>
-                </div>
-              </div>
-            </Card>
+          <div className="relative">
+            {/* Navigation Buttons */}
+            <button
+              onClick={() => scrollTestimonials('left')}
+              disabled={!canScrollLeft}
+              className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-3 shadow-lg transition-all ${
+                canScrollLeft 
+                  ? 'opacity-100 hover:scale-110 cursor-pointer' 
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+              aria-label="Previous testimonial"
+            >
+              <ChevronLeft className="h-6 w-6 text-gray-700" />
+            </button>
 
-            <Card className="p-6 hover:shadow-lg transition-shadow">
-              <div className="flex mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4">
-                "The media kit alone made hosts say yes. Easiest PR I've ever done. 
-                Worth every penny."
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-gray-200 rounded-full mr-3"></div>
-                <div>
-                  <p className="font-semibold text-gray-900">James K.</p>
-                  <p className="text-sm text-gray-600">Author</p>
-                </div>
-              </div>
-            </Card>
+            <button
+              onClick={() => scrollTestimonials('right')}
+              disabled={!canScrollRight}
+              className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-3 shadow-lg transition-all ${
+                canScrollRight 
+                  ? 'opacity-100 hover:scale-110 cursor-pointer' 
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+              aria-label="Next testimonial"
+            >
+              <ChevronRight className="h-6 w-6 text-gray-700" />
+            </button>
 
-            <Card className="p-6 hover:shadow-lg transition-shadow">
-              <div className="flex mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+            {/* Testimonial Carousel */}
+            <div 
+              ref={testimonialRef}
+              onScroll={checkScrollButtons}
+              className="overflow-x-auto scrollbar-hide scroll-smooth"
+            >
+              <div className="flex gap-6 px-12">
+                {testimonialImages.map((image, index) => (
+                  <div 
+                    key={index} 
+                    className="flex-shrink-0 w-[500px] h-[400px] relative group"
+                  >
+                    <img 
+                      src={image} 
+                      alt={`Client testimonial ${index + 1}`}
+                      className="w-full h-full object-contain rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 bg-white"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg pointer-events-none" />
+                  </div>
                 ))}
               </div>
-              <p className="text-gray-700 mb-4">
-                "Saved me 20+ hours of outreach a week — and got better shows than I 
-                could find myself."
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-gray-200 rounded-full mr-3"></div>
-                <div>
-                  <p className="font-semibold text-gray-900">Priya D.</p>
-                  <p className="text-sm text-gray-600">SaaS Founder</p>
-                </div>
-              </div>
-            </Card>
+            </div>
+
+            {/* Dots Indicator */}
+            <div className="flex justify-center gap-2 mt-8">
+              {testimonialImages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (testimonialRef.current) {
+                      const scrollPosition = index * 530; // 500px width + 30px gap
+                      testimonialRef.current.scrollTo({
+                        left: scrollPosition,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
+                  className="w-2 h-2 rounded-full bg-gray-300 hover:bg-indigo-600 transition-colors"
+                  aria-label={`Go to testimonial ${index + 1}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>
