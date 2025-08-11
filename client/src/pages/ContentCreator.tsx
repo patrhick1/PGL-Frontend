@@ -100,7 +100,7 @@ function MediaKitSection() {
   const [previewKit, setPreviewKit] = useState<MediaKit | null>(null);
 
   const { data: mediaKits = [], isLoading } = useQuery<MediaKit[]>({
-    queryKey: ['/api/media-kits'],
+    queryKey: ['/media-kits'],
   });
 
   const form = useForm<MediaKitFormData>({
@@ -123,7 +123,7 @@ function MediaKitSection() {
 
   const createMediaKitMutation = useMutation({
     mutationFn: async (data: MediaKitFormData) => {
-      const response = await fetch("/api/media-kits", {
+      const response = await fetch("/media-kits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -133,7 +133,7 @@ function MediaKitSection() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Media kit created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/media-kits"] });
+      queryClient.invalidateQueries({ queryKey: ["/media-kits"] });
       form.reset();
     },
     onError: () => {
@@ -355,7 +355,7 @@ function AngleGeneratorSection() {
 
   const generateAnglesMutation = useMutation({
     mutationFn: async (data: AngleGeneratorFormData) => {
-      const response = await fetch("/api/angles/generate", {
+      const response = await fetch("/angles/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

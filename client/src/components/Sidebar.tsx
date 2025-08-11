@@ -18,7 +18,8 @@ import {
   LayoutGrid,
   // Sparkles, // Icon for AI Content Tools if it becomes a top-level item
   Send,
-  FileText as PitchTemplateIcon
+  FileText as PitchTemplateIcon,
+  Inbox as InboxIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +39,8 @@ interface NavigationItem {
 // --- CLIENT NAVIGATION ---
 const clientNavigationItems: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: BarChart3, roles: ['client'] },
+  { name: "Inbox", href: "/inbox", icon: InboxIcon, roles: ['client'] }, // Nylas inbox
+  { name: "Analytics", href: "/analytics", icon: TrendingUp, roles: ['client'] }, // Analytics dashboards
   { name: "Guest Profile Setup", href: "/profile-setup", icon: ClipboardList, roles: ['client'] },
   { name: "My Campaigns", href: "/my-campaigns", icon: FolderOpen, roles: ['client'] },
   { name: "Approve Matches", href: "/approvals", icon: CheckCircle, roles: ['client'] }, // Approvals page will filter for clients
@@ -47,6 +50,8 @@ const clientNavigationItems: NavigationItem[] = [
 // --- INTERNAL STAFF/ADMIN NAVIGATION ---
 const internalNavigationItems: NavigationItem[] = [
   { name: "Team Dashboard", href: "/", icon: LayoutGrid, roles: ['staff', 'admin'] },
+  { name: "Inbox", href: "/inbox", icon: InboxIcon, roles: ['staff', 'admin'] }, // Nylas inbox
+  { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ['staff', 'admin'] }, // Analytics dashboards
   { name: "Client & Campaigns", href: "/campaign-management", icon: ClientsIcon, roles: ['staff', 'admin'] },
   { name: "Podcast Discovery", href: "/discover", icon: Search, roles: ['staff', 'admin'] },
   { name: "Pitch Outreach Hub", href: "/pitch-outreach", icon: Send, roles: ['staff', 'admin'] },

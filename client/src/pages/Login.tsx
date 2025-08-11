@@ -345,6 +345,13 @@ export default function Landing() {
                       Sign Up
                     </Link>
                   </p>
+                  
+                  <p className="text-xs text-gray-500 mt-4">
+                    By logging in, you agree to our{' '}
+                    <Link href="/privacy" className="underline hover:text-primary">
+                      Privacy Policy
+                    </Link>
+                  </p>
                 </div>
 
                 <p className="text-center text-sm text-gray-500 mt-6">

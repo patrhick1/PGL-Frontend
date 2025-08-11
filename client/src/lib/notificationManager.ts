@@ -28,14 +28,17 @@ export class NotificationManager {
 
   connect() {
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
+      // Use the backend API URL for WebSocket connection
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const wsProtocol = apiUrl.startsWith('https') ? 'wss:' : 'ws:';
+      const apiHost = new URL(apiUrl).host;
+      
       const params = new URLSearchParams({
         token: this.authToken,
         ...(this.campaignId && { campaign_id: this.campaignId })
       });
       
-      const wsUrl = `${protocol}//${host}/notifications/ws?${params}`;
+      const wsUrl = `${wsProtocol}//${apiHost}/notifications/ws?${params}`;
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {

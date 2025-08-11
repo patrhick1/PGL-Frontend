@@ -39,6 +39,9 @@ import PublicMediaKitPage from "@/pages/PublicMediaKitPage"; // Added for public
 import ResetPasswordPage from "@/pages/ResetPassword"; // Added for password reset
 import Onboarding from "@/pages/Onboarding"; // Added for onboarding flow
 import EmailVerification from "@/pages/EmailVerification"; // Added for email verification
+import Inbox from "@/pages/Inbox"; // Added for Nylas inbox integration
+import Analytics from "@/pages/Analytics"; // Added for analytics dashboards
+import PrivacyPolicy from "@/pages/PrivacyPolicy"; // Privacy policy page
 
 
 function Router() {
@@ -60,6 +63,7 @@ function Router() {
       <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Public media kit route - accessible to all users */}
       <Route path="/onboarding" component={Onboarding} /> {/* Onboarding route - token-based auth */}
       <Route path="/verify-email" component={EmailVerification} /> {/* Email verification route */}
+      <Route path="/privacy" component={PrivacyPolicy} /> {/* Privacy policy page */}
       
       {!isAuthenticated ? (
         <>
@@ -78,6 +82,8 @@ function Router() {
           <Switch> {/* <<< NESTED SWITCH for authenticated routes */}
             {/* Common Routes for all authenticated users */}
             <Route path="/" component={Dashboard} />
+            <Route path="/inbox" component={Inbox} /> {/* Nylas inbox integration */}
+            <Route path="/analytics" component={Analytics} /> {/* Analytics dashboards */}
             <Route path="/settings" component={Settings} />
             <Route path="/placement-tracking" component={PlacementTracking} />
             <Route path="/approvals" component={Approvals} /> 

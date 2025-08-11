@@ -270,6 +270,13 @@ export default function SignupPage() {
                     Sign In
                   </Link>
                 </p>
+                
+                <p className="text-xs text-gray-500 mt-4">
+                  By signing up, you agree to our{' '}
+                  <Link href="/privacy" className="underline hover:text-primary">
+                    Privacy Policy
+                  </Link>
+                </p>
               </div>
             </CardContent>
           </Card>

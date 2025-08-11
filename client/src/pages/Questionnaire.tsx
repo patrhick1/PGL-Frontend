@@ -1146,17 +1146,49 @@ function FinalNotesSection({ form }: any) {
       <FormField control={form.control} name="finalNotes.idealPodcastDescription" render={({ field }) => (
         <FormItem>
           <FormLabel className="text-base font-medium">Ideal Podcast Preferences (Optional)</FormLabel>
-          <FormDescription className="space-y-2">
+          <FormDescription className="space-y-3">
             <div>
-              Describe your ideal podcast types and audience preferences. Mention specific topics, formats, or show characteristics that align with your expertise.
+              Help us find your perfect podcast matches by describing shows that align with your expertise.
             </div>
-            <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded border">
-              <strong>Example:</strong> "I'm particularly interested in business podcasts with 10K+ downloads that focus on leadership and entrepreneurship. I prefer shows with engaging hosts who ask thoughtful questions about scaling teams and building company culture."
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-amber-900 mb-2">
+                🎯 Focus Tip: Choose 1-2 Primary Topics
+              </p>
+              <p className="text-sm text-amber-800">
+                Rather than listing all your areas of expertise, focus on the 1-2 topics you're most passionate about. This helps us find highly relevant shows where you'll shine as an expert.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-green-900 mb-1">✅ Good Example:</p>
+                <p className="text-xs text-green-700 italic">
+                  "I love talking about sustainable business practices and circular economy on shows focused on environmental entrepreneurship. Ideal shows have 5K+ engaged listeners who are founders or sustainability leaders."
+                </p>
+              </div>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-red-900 mb-1">❌ Too Restrictive:</p>
+                <p className="text-xs text-red-700 italic">
+                  "Only top 10 business podcasts with 100K+ downloads, must be video format, host must be a CEO, only want to discuss all 15 of my expertise areas."
+                </p>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <p className="font-medium mb-1">Consider mentioning:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Your 1-2 favorite topics to discuss in depth</li>
+                <li>Target audience (entrepreneurs, marketers, tech leaders, etc.)</li>
+                <li>Preferred show format (interview, conversational, educational)</li>
+                <li>Any specific values or themes that resonate with you</li>
+              </ul>
             </div>
           </FormDescription>
           <FormControl>
             <Textarea 
-              placeholder="Describe your ideal podcast preferences: What types of shows interest you? What audience size? What topics align with your expertise? Any specific format preferences (interview style, solo shows, panel discussions)?"
+              placeholder="Example: I'm passionate about discussing data-driven marketing strategies on business and marketing podcasts. I connect best with shows targeting B2B marketers and growth leaders who want practical, actionable insights. I enjoy conversational formats where I can share real case studies and results."
               className="min-h-[100px]"
               {...field} 
             />
