@@ -42,6 +42,8 @@ import EmailVerification from "@/pages/EmailVerification"; // Added for email ve
 import Inbox from "@/pages/Inbox"; // Added for Nylas inbox integration
 import Analytics from "@/pages/Analytics"; // Added for analytics dashboards
 import PrivacyPolicy from "@/pages/PrivacyPolicy"; // Privacy policy page
+import TermsOfService from "@/pages/TermsOfService"; // Terms of service page
+import Contact from "@/pages/Contact"; // Contact page
 
 
 function Router() {
@@ -64,6 +66,8 @@ function Router() {
       <Route path="/onboarding" component={Onboarding} /> {/* Onboarding route - token-based auth */}
       <Route path="/verify-email" component={EmailVerification} /> {/* Email verification route */}
       <Route path="/privacy" component={PrivacyPolicy} /> {/* Privacy policy page */}
+      <Route path="/terms" component={TermsOfService} /> {/* Terms of service page */}
+      <Route path="/contact" component={Contact} /> {/* Contact page */}
       
       {!isAuthenticated ? (
         <>
