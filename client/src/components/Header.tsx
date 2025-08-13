@@ -45,7 +45,7 @@ export default function Header() {
   const { user } = useAuth();
   
   const currentPage = pageInfo[location] || { 
-    title: "PGL CRM", 
+    title: "PGL", 
     description: "Professional podcast booking system" 
   };
 
@@ -57,29 +57,30 @@ export default function Header() {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="px-6 py-4">
+      <div className="px-4 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-6">
-            <img src={logoName} alt="Podcast Guest Launch" className="h-8" />
-            <div>
-              <h2 className="text-xl font-semibold text-gray-700">{currentPage.title}</h2>
-              <p className="text-sm text-gray-600 mt-1">{currentPage.description}</p>
+          <div className="flex items-center min-w-0 flex-1 pl-14 lg:pl-0">
+            <img src={logoName} alt="Podcast Guest Launch" className="h-6 sm:h-8 flex-shrink-0" />
+            <div className="ml-3 sm:ml-6 min-w-0">
+              <h2 className="text-base sm:text-xl font-semibold text-gray-700 truncate">{currentPage.title}</h2>
+              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">{currentPage.description}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center ml-3 space-x-2 sm:space-x-4 flex-shrink-0">
             <Button 
-              className="bg-primary text-white hover:bg-black-700"
+              className="bg-primary text-white hover:bg-black-700 text-xs sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
               onClick={handleBookDemo}
             >
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Book Demo
+              <CalendarPlus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Book Demo</span>
+              <span className="sm:hidden">Book</span>
             </Button>
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
               <AvatarImage 
                 src={user?.profile_image_url ? `${user.profile_image_url}?t=${Date.now()}` : undefined} 
                 alt={user?.full_name || user?.username || "User"}
               />
-              <AvatarFallback className="bg-gray-300 text-gray-700">
+              <AvatarFallback className="bg-gray-300 text-gray-700 text-xs sm:text-sm">
                 {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : user?.username?.[0]?.toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>

@@ -19,7 +19,8 @@ import {
   // Sparkles, // Icon for AI Content Tools if it becomes a top-level item
   Send,
   FileText as PitchTemplateIcon,
-  Inbox as InboxIcon
+  Inbox as InboxIcon,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -67,7 +68,11 @@ const accountNavigationItems: NavigationItem[] = [
   { name: "My Settings", href: "/settings", icon: Settings, roles: ['client', 'staff', 'admin'] },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+export default function Sidebar({ onClose }: SidebarProps = {}) {
   const [location, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth(); // user contains role and person_id
   const { toast } = useToast();
@@ -133,13 +138,23 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-sidebar shadow-lg border-r border-sidebar-border flex flex-col h-screen sticky top-0">
-      <div className="p-6 border-b border-sidebar-border">
+      <div className="p-6 border-b border-sidebar-border flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-3 group">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
                 <Mic className="text-primary-foreground h-5 w-5" />
             </div>
-            <h1 className="text-xl font-bold text-sidebar-foreground group-hover:text-primary transition-colors">PGL CRM</h1>
+            <h1 className="text-xl font-bold text-sidebar-foreground group-hover:text-primary transition-colors">PGL</h1>
         </Link>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        )}
       </div>
       
       <nav className="flex-1 flex flex-col justify-between overflow-y-auto">

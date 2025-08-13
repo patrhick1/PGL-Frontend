@@ -508,6 +508,8 @@ export default function Approvals() {
       task_type: "match_suggestion"
     }],
     placeholderData: (previousData) => previousData,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
   
   // Client-side pagination
@@ -566,7 +568,26 @@ export default function Approvals() {
   }, [statusFilter, taskTypeFilter]);
 
   if (error) {
-    return <div className="text-red-500 p-4">Error loading review tasks: {error.message}</div>;
+    return (
+      <div className="max-w-7xl mx-auto p-4 md:p-6">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-8">
+            <div className="text-center">
+              <XCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
+              <h3 className="text-lg font-semibold text-red-700 mb-2">Failed to Load Review Tasks</h3>
+              <p className="text-red-600 mb-4">{error.message}</p>
+              <Button 
+                onClick={() => window.location.reload()}
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-100"
+              >
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -649,9 +670,30 @@ export default function Approvals() {
             </div>
           </div>
 
-          {isLoading && !reviewTasksData && displayedTasks.length === 0 ? ( 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {[...Array(Math.min(5, ITEMS_PER_PAGE))].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-lg" />)}
+          {isLoading ? ( 
+            <div className="space-y-4">
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <span className="ml-3 text-gray-600">Loading match suggestions...</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardHeader className="pb-4">
+                      <Skeleton className="h-5 w-2/5 mb-2" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-1/2 mt-1" />
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <Skeleton className="h-20 w-full" />
+                      <div className="flex space-x-2 pt-4">
+                        <Skeleton className="h-9 w-1/2" />
+                        <Skeleton className="h-9 w-1/2" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           ) : displayedTasks.length === 0 ? (
             <div className="text-center py-10">
@@ -660,10 +702,20 @@ export default function Approvals() {
               <p className="text-gray-500 text-sm">Try adjusting your filters or search terms.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {displayedTasks.map((task) => (
-                <ReviewTaskItem key={task.review_task_id} task={task} />
-              ))}
+            <div className="relative">
+              {isFetching && !isLoading && (
+                <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
+                  <div className="bg-white rounded-lg shadow-lg p-4 flex items-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    <span className="ml-3 text-gray-600">Refreshing data...</span>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {displayedTasks.map((task) => (
+                  <ReviewTaskItem key={task.review_task_id} task={task} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -679,6 +731,7 @@ export default function Approvals() {
                 Previous
               </Button>
               <span className="text-sm text-gray-700">
+                {isFetching && <span className="animate-pulse mr-2">Updating...</span>}
                 Page {currentPage} of {totalPages} (Total: {totalTasks})
               </span>
               <Button
