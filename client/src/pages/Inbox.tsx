@@ -48,13 +48,22 @@ export default function Inbox() {
 
   // Fetch email threads
   const { 
-    data: threads, 
+    data: threadsData = [], // Default to empty array
     isLoading, 
     refetch: refetchThreads 
   } = useQuery<EmailThread[]>({
     queryKey: ['/inbox/threads', filters],
     enabled: nylasStatus?.connected === true,
   });
+
+  // Ensure threads is always an array (double safety)
+  const threads = Array.isArray(threadsData) ? threadsData : [];
+  
+  // Debug logging
+  console.log('Inbox Debug - threadsData:', threadsData, 'threads:', threads, 'isArray:', Array.isArray(threads));
+  if (!Array.isArray(threads)) {
+    console.error('CRITICAL: Threads is not an array:', threads, 'threadsData:', threadsData);
+  }
 
   // Mark thread as read mutation
   const markAsReadMutation = useMutation({
@@ -91,13 +100,13 @@ export default function Inbox() {
 
   // Auto-mark as read when thread is selected
   useEffect(() => {
-    if (selectedThread) {
-      const thread = threads?.find(t => t.id === selectedThread);
+    if (selectedThread && threads.length > 0) {
+      const thread = threads.find(t => t.id === selectedThread);
       if (thread && thread.unread_count > 0) {
         markAsReadMutation.mutate(selectedThread);
       }
     }
-  }, [selectedThread]);
+  }, [selectedThread, threads]);
 
   const handleFolderChange = (folder: string) => {
     setActiveFolder(folder);
@@ -166,9 +175,9 @@ export default function Inbox() {
               >
                 <folder.icon className="w-4 h-4" />
                 <span className="flex-1 text-left">{folder.label}</span>
-                {folder.id === 'inbox' && threads && (
+                {folder.id === 'inbox' && Array.isArray(threads) && threads.length > 0 && (
                   <span className="text-xs">
-                    {threads.filter(t => t.unread_count > 0).length}
+                    {threads.filter((t: any) => t && typeof t.unread_count === 'number' && t.unread_count > 0).length}
                   </span>
                 )}
               </button>
@@ -246,9 +255,9 @@ export default function Inbox() {
               <div className="flex items-center justify-center h-32">
                 <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
               </div>
-            ) : threads && threads.length > 0 ? (
+            ) : Array.isArray(threads) && threads.length > 0 ? (
               <div className="divide-y">
-                {threads.map(thread => (
+                {threads.map((thread: any) => (
                   <button
                     key={thread.id}
                     onClick={() => setSelectedThread(thread.id)}

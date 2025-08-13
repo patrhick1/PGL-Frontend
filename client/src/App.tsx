@@ -44,6 +44,7 @@ import Analytics from "@/pages/Analytics"; // Added for analytics dashboards
 import PrivacyPolicy from "@/pages/PrivacyPolicy"; // Privacy policy page
 import TermsOfService from "@/pages/TermsOfService"; // Terms of service page
 import Contact from "@/pages/Contact"; // Contact page
+import NylasCallback from "@/pages/NylasCallback"; // Nylas OAuth callback handler
 
 
 function Router() {
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/media-kit/:slug" component={PublicMediaKitPage} /> {/* Public media kit route - accessible to all users */}
       <Route path="/onboarding" component={Onboarding} /> {/* Onboarding route - token-based auth */}
       <Route path="/verify-email" component={EmailVerification} /> {/* Email verification route */}
+      <Route path="/nylas/callback" component={NylasCallback} /> {/* Nylas OAuth callback route */}
       <Route path="/privacy" component={PrivacyPolicy} /> {/* Privacy policy page */}
       <Route path="/terms" component={TermsOfService} /> {/* Terms of service page */}
       <Route path="/contact" component={Contact} /> {/* Contact page */}

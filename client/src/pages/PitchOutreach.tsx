@@ -21,6 +21,10 @@ import { Link, useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PitchTemplate } from "@/pages/PitchTemplates.tsx"; // Added .tsx extension
 import { Checkbox } from "@/components/ui/checkbox";
+import { usePitchSending } from "@/hooks/usePitchSending";
+import { EmailStatusBadge } from "@/components/pitch/EmailStatusBadge";
+import { SendPitchButton } from "@/components/pitch/SendPitchButton";
+import { BatchSendButton } from "@/components/pitch/BatchSendButton";
 
 // --- Interfaces (Aligned with expected enriched backend responses) ---
 
@@ -408,38 +412,38 @@ function ReadyToSendTab({
     pitches, onSend, onBulkSend, onPreview, isLoadingSendForPitchId, isLoadingBulkSend, isLoadingPitches
 }: {
     pitches: PitchReadyToSend[];
-    onSend: (pitchId: number) => void;
-    onBulkSend: (pitchIds: number[]) => void;
+    onSend: (pitchGenId: number) => void;
+    onBulkSend: (pitchGenIds: number[]) => void;
     onPreview: (pitch: PitchReadyToSend) => void;
     isLoadingSendForPitchId: number | null;
     isLoadingBulkSend: boolean;
     isLoadingPitches: boolean;
 }) {
-    const [selectedPitchIds, setSelectedPitchIds] = useState<number[]>([]);
+    const [selectedPitchGenIds, setSelectedPitchGenIds] = useState<number[]>([]);
     const [selectAll, setSelectAll] = useState(false);
 
     const handleSelectAll = (checked: boolean) => {
         setSelectAll(checked);
         if (checked) {
-            setSelectedPitchIds(pitches.map(p => p.pitch_id));
+            setSelectedPitchGenIds(pitches.map(p => p.pitch_gen_id));
         } else {
-            setSelectedPitchIds([]);
+            setSelectedPitchGenIds([]);
         }
     };
 
-    const handleSelectPitch = (pitchId: number, checked: boolean) => {
+    const handleSelectPitch = (pitchGenId: number, checked: boolean) => {
         if (checked) {
-            setSelectedPitchIds([...selectedPitchIds, pitchId]);
+            setSelectedPitchGenIds([...selectedPitchGenIds, pitchGenId]);
         } else {
-            setSelectedPitchIds(selectedPitchIds.filter(id => id !== pitchId));
+            setSelectedPitchGenIds(selectedPitchGenIds.filter(id => id !== pitchGenId));
             setSelectAll(false);
         }
     };
 
     const handleBulkSend = () => {
-        if (selectedPitchIds.length === 0) return;
-        onBulkSend(selectedPitchIds);
-        setSelectedPitchIds([]);
+        if (selectedPitchGenIds.length === 0) return;
+        onBulkSend(selectedPitchGenIds);
+        setSelectedPitchGenIds([]);
         setSelectAll(false);
     };
 
@@ -461,22 +465,22 @@ function ReadyToSendTab({
                         disabled={isLoadingBulkSend}
                     />
                     <span className="text-sm text-gray-600">
-                        {selectedPitchIds.length === 0 
+                        {selectedPitchGenIds.length === 0 
                             ? "Select all" 
-                            : `${selectedPitchIds.length} of ${pitches.length} selected`}
+                            : `${selectedPitchGenIds.length} of ${pitches.length} selected`}
                     </span>
                 </div>
                 <Button
                     size="sm"
                     variant="default"
                     onClick={handleBulkSend}
-                    disabled={selectedPitchIds.length === 0 || isLoadingBulkSend}
+                    disabled={selectedPitchGenIds.length === 0 || isLoadingBulkSend}
                     className="bg-blue-600 hover:bg-blue-700"
                 >
                     {isLoadingBulkSend ? (
                         <><RefreshCw className="h-4 w-4 animate-spin mr-1.5"/> Sending...</>
                     ) : (
-                        <><SendHorizontal className="h-4 w-4 mr-1.5"/> Send Selected ({selectedPitchIds.length})</>
+                        <><SendHorizontal className="h-4 w-4 mr-1.5"/> Send Selected ({selectedPitchGenIds.length})</>
                     )}
                 </Button>
             </div>
@@ -487,8 +491,8 @@ function ReadyToSendTab({
                     <Card key={pitch.pitch_id} className="p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start space-x-3">
                             <Checkbox
-                                checked={selectedPitchIds.includes(pitch.pitch_id)}
-                                onCheckedChange={(checked) => handleSelectPitch(pitch.pitch_id, checked as boolean)}
+                                checked={selectedPitchGenIds.includes(pitch.pitch_gen_id)}
+                                onCheckedChange={(checked) => handleSelectPitch(pitch.pitch_gen_id, checked as boolean)}
                                 disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_id}
                                 className="mt-1"
                             />
@@ -518,10 +522,10 @@ function ReadyToSendTab({
                                     <Button
                                         size="sm"
                                         className="bg-blue-600 hover:bg-blue-700 text-white"
-                                        onClick={() => onSend(pitch.pitch_id)}
-                                        disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_id}
+                                        onClick={() => onSend(pitch.pitch_gen_id)}
+                                        disabled={isLoadingBulkSend || isLoadingSendForPitchId === pitch.pitch_gen_id}
                                     >
-                                        {isLoadingSendForPitchId === pitch.pitch_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Send className="h-4 w-4 mr-1.5"/>}
+                                        {isLoadingSendForPitchId === pitch.pitch_gen_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Send className="h-4 w-4 mr-1.5"/>}
                                         Send
                                     </Button>
                                 </div>
@@ -774,6 +778,16 @@ export default function PitchOutreach() {
     onError: (error: any) => { toast({ title: "Update Failed", description: error.message, variant: "destructive" }); },
   });
 
+  // Get Nylas sending functions
+  const { 
+    sendPitch: sendPitchViaNylas, 
+    sendBatch: sendBatchViaNylas,
+    isPitchSending,
+    isEmailConnected 
+  } = usePitchSending();
+
+  // OLD: Replaced with Nylas sending
+  /*
   const sendPitchMutation = useMutation({
     mutationFn: async (pitchId: number) => {
         setIsLoadingSendForPitchId(pitchId);
@@ -790,7 +804,19 @@ export default function PitchOutreach() {
     onError: (error: any) => { toast({ title: "Send Failed", description: error.message, variant: "destructive" }); },
     onSettled: () => { setIsLoadingSendForPitchId(null); }
   });
+  */
 
+  // NEW: Using Nylas for sending
+  const sendPitchMutation = {
+    mutate: (pitchGenId: number) => {
+      setIsLoadingSendForPitchId(pitchGenId);
+      sendPitchViaNylas(pitchGenId);
+      setTimeout(() => setIsLoadingSendForPitchId(null), 2000);
+    },
+    isPending: false
+  };
+
+  /*
   const bulkSendPitchesMutation = useMutation({
     mutationFn: async (pitchIds: number[]) => {
         setIsLoadingBulkSend(true);
@@ -825,6 +851,20 @@ export default function PitchOutreach() {
     },
     onSettled: () => { setIsLoadingBulkSend(false); }
   });
+  */
+
+  // NEW: Using Nylas for batch sending
+  const bulkSendPitchesMutation = {
+    mutate: (pitchGenIds: number[]) => {
+      setIsLoadingBulkSend(true);
+      sendBatchViaNylas(pitchGenIds);
+      setTimeout(() => {
+        setIsLoadingBulkSend(false);
+        setActiveTab("sentPitches");
+      }, 3000);
+    },
+    isPending: false
+  };
 
 
   const handleGeneratePitch = (matchId: number, templateId: string) => {
@@ -835,8 +875,8 @@ export default function PitchOutreach() {
     generateBatchPitchDraftsMutation.mutate(items);
   };
   const handleApprovePitch = (pitchGenId: number) => { approvePitchDraftMutation.mutate(pitchGenId); };
-  const handleSendPitch = (pitchId: number) => { sendPitchMutation.mutate(pitchId); };
-  const handleBulkSendPitches = (pitchIds: number[]) => { bulkSendPitchesMutation.mutate(pitchIds); };
+  const handleSendPitch = (pitchGenId: number) => { sendPitchMutation.mutate(pitchGenId); };
+  const handleBulkSendPitches = (pitchGenIds: number[]) => { bulkSendPitchesMutation.mutate(pitchGenIds); };
   const handleOpenEditModal = (draft: PitchDraftForReview) => { setEditingDraft(draft); setIsEditModalOpen(true); };
   const handleSaveEditedDraft = (pitchGenId: number, data: EditDraftFormData) => { updatePitchDraftMutation.mutate({ pitchGenId, data }); };
   const handlePreviewPitch = (pitch: PitchReadyToSend) => { setPreviewPitch(pitch); setIsPreviewModalOpen(true); };
@@ -857,6 +897,7 @@ export default function PitchOutreach() {
             </h1>
             <p className="text-gray-600">Oversee the entire pitch lifecycle from drafting to sending and tracking.</p>
         </div>
+        <EmailStatusBadge showConnectButton={true} showDisconnect={true} />
       </div>
 
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -968,14 +1009,14 @@ export default function PitchOutreach() {
             <Button 
               onClick={() => {
                 if (previewPitch) {
-                  handleSendPitch(previewPitch.pitch_id);
+                  handleSendPitch(previewPitch.pitch_gen_id);
                   setIsPreviewModalOpen(false);
                 }
               }}
-              disabled={isLoadingSendForPitchId === previewPitch?.pitch_id}
+              disabled={isLoadingSendForPitchId === previewPitch?.pitch_gen_id}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isLoadingSendForPitchId === previewPitch?.pitch_id ? (
+              {isLoadingSendForPitchId === previewPitch?.pitch_gen_id ? (
                 <><RefreshCw className="h-4 w-4 animate-spin mr-1"/> Sending...</>
               ) : (
                 <><Send className="h-4 w-4 mr-1.5"/> Send Pitch</>

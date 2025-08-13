@@ -32,8 +32,11 @@ export default function NylasConnect({ status }: NylasConnectProps) {
       return res.json();
     },
     onSuccess: (data) => {
-      if (data.auth_url) {
+      if (data.oauth_url) {
         // Redirect to Nylas OAuth flow
+        window.location.href = data.oauth_url;
+      } else if (data.auth_url) {
+        // Fallback for backward compatibility
         window.location.href = data.auth_url;
       }
     },
