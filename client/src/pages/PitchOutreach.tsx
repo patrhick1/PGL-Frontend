@@ -25,6 +25,10 @@ import { usePitchSending } from "@/hooks/usePitchSending";
 import { EmailStatusBadge } from "@/components/pitch/EmailStatusBadge";
 import { SendPitchButton } from "@/components/pitch/SendPitchButton";
 import { BatchSendButton } from "@/components/pitch/BatchSendButton";
+import { usePitchCapabilities } from "@/hooks/usePitchCapabilities";
+import { UpgradePrompt } from "@/components/pitch/UpgradePrompt";
+import { ManualPitchEditor } from "@/components/pitch/ManualPitchEditor";
+import { useAuth } from "@/hooks/useAuth";
 
 // --- Interfaces (Aligned with expected enriched backend responses) ---
 
@@ -105,10 +109,52 @@ const editDraftSchema = z.object({
 type EditDraftFormData = z.infer<typeof editDraftSchema>;
 
 
+// --- Helper Components ---
+
+function CampaignSelector({ selectedCampaignId, onCampaignChange, isClient }: {
+    selectedCampaignId: string | null;
+    onCampaignChange: (campaignId: string | null) => void;
+    isClient?: boolean;
+}) {
+    const { data: campaigns, isLoading } = useQuery({
+        queryKey: ['/campaigns', isClient ? 'client' : 'all'],
+        queryFn: async () => {
+            // Use the campaigns endpoint for all users
+            const url = '/campaigns';
+            const response = await apiRequest('GET', url);
+            if (!response.ok) throw new Error('Failed to fetch campaigns');
+            return response.json();
+        },
+    });
+
+    if (isLoading) {
+        return <Skeleton className="h-10 w-full" />;
+    }
+
+    return (
+        <Select 
+            value={selectedCampaignId || "all"} 
+            onValueChange={(value) => onCampaignChange(value === "all" ? null : value)}
+        >
+            <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a campaign..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Campaigns</SelectItem>
+                {campaigns?.map((campaign: any) => (
+                    <SelectItem key={campaign.campaign_id} value={campaign.campaign_id}>
+                        {campaign.campaign_name || `Campaign ${campaign.campaign_id.substring(0, 8)}`}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
 // --- Tab Components ---
 
 function ReadyForDraftTab({
-    approvedMatches, onGenerate, onGenerateBatch, isLoadingGenerateForMatchId, isLoadingBatchGenerate, templates, isLoadingMatches
+    approvedMatches, onGenerate, onGenerateBatch, isLoadingGenerateForMatchId, isLoadingBatchGenerate, templates, isLoadingMatches, canUseAI, isFreePlan
 }: {
     approvedMatches: ApprovedMatchForPitching[];
     onGenerate: (matchId: number, templateId: string) => void;
@@ -117,8 +163,10 @@ function ReadyForDraftTab({
     isLoadingBatchGenerate: boolean;
     templates: PitchTemplate[];
     isLoadingMatches: boolean;
+    canUseAI?: boolean;
+    isFreePlan?: boolean;
 }) {
-    const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>("manual");
     const [selectedMatchIds, setSelectedMatchIds] = useState<number[]>([]);
     const [selectAll, setSelectAll] = useState(false);
 
@@ -126,10 +174,11 @@ function ReadyForDraftTab({
     const filteredTemplates = templates.filter(t => t.template_id !== "subject_line_v1");
 
     useEffect(() => {
-        if (filteredTemplates && filteredTemplates.length > 0 && !selectedTemplateId) {
+        // Only auto-select a template if we have AI access and templates available
+        if (canUseAI && filteredTemplates && filteredTemplates.length > 0 && selectedTemplateId === "manual") {
             setSelectedTemplateId(filteredTemplates[0].template_id);
         }
-    }, [filteredTemplates, selectedTemplateId]);
+    }, [filteredTemplates, selectedTemplateId, canUseAI]);
 
     const handleSelectAll = (checked: boolean) => {
         setSelectAll(checked);
@@ -174,16 +223,40 @@ function ReadyForDraftTab({
 
     return (
         <div className="space-y-6">
+            {isFreePlan && (
+                <UpgradePrompt 
+                    message="Upgrade to Premium to use AI-powered pitch generation and access all templates"
+                    features={[
+                        'AI generates personalized pitches',
+                        'Access to proven pitch templates',
+                        'Bulk pitch generation'
+                    ]}
+                    variant="inline"
+                />
+            )}
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
                 <div className="flex-1">
-                    <label htmlFor="pitch-template-select" className="text-sm font-medium block mb-2 text-gray-700">Select Pitch Template:</label>
-                    <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={!filteredTemplates || filteredTemplates.length === 0}>
+                    <label htmlFor="pitch-template-select" className="text-sm font-medium block mb-2 text-gray-700">
+                        {canUseAI ? 'Select Pitch Template:' : 'Manual Pitch Creation (Premium templates not available)'}
+                    </label>
+                    <Select 
+                        value={selectedTemplateId === "" ? "manual" : selectedTemplateId} 
+                        onValueChange={setSelectedTemplateId} 
+                        disabled={!canUseAI}
+                    >
                       <SelectTrigger id="pitch-template-select" className="w-full md:w-2/3">
                           <SelectValue placeholder="Select pitch template..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(!filteredTemplates || filteredTemplates.length === 0) && <SelectItem value="" disabled>No templates available. Create one in Pitch Templates.</SelectItem>}
-                        {filteredTemplates && filteredTemplates.map(opt => <SelectItem key={opt.template_id} value={opt.template_id}>{opt.template_id} (Tone: {opt.tone || 'N/A'})</SelectItem>)}
+                        {!canUseAI ? (
+                            <SelectItem value="manual">Manual Pitch (Upgrade for AI Templates)</SelectItem>
+                        ) : (
+                            (!filteredTemplates || filteredTemplates.length === 0) ? (
+                                <SelectItem value="manual">Manual Pitch Creation</SelectItem>
+                            ) : (
+                                filteredTemplates.map(opt => <SelectItem key={opt.template_id} value={opt.template_id}>{opt.template_id} (Tone: {opt.tone || 'N/A'})</SelectItem>)
+                            )
+                        )}
                       </SelectContent>
                     </Select>
                 </div>
@@ -206,13 +279,13 @@ function ReadyForDraftTab({
                         size="sm"
                         variant="default"
                         onClick={handleBatchGenerate}
-                        disabled={selectedMatchIds.length === 0 || !selectedTemplateId || isLoadingBatchGenerate}
+                        disabled={selectedMatchIds.length === 0 || !selectedTemplateId || isLoadingBatchGenerate || !canUseAI}
                         className="bg-primary hover:bg-primary/90"
                     >
                         {isLoadingBatchGenerate ? (
                             <><RefreshCw className="h-4 w-4 animate-spin mr-1.5"/> Generating...</>
                         ) : (
-                            <><Lightbulb className="h-4 w-4 mr-1.5"/> Generate Selected ({selectedMatchIds.length})</>
+                            <><Lightbulb className="h-4 w-4 mr-1.5"/> {canUseAI ? `Generate Selected (${selectedMatchIds.length})` : 'AI Generation (Premium)'}</>
                         )}
                     </Button>
                 </div>
@@ -243,12 +316,12 @@ function ReadyForDraftTab({
                                 </div>
                                 <Button
                                     size="sm"
-                                    onClick={() => onGenerate(match.match_id, selectedTemplateId)}
-                                    disabled={isLoadingBatchGenerate || isLoadingGenerateForMatchId === match.match_id || !selectedTemplateId || !filteredTemplates || filteredTemplates.length === 0}
+                                    onClick={() => onGenerate(match.match_id, canUseAI ? selectedTemplateId : "manual")}
+                                    disabled={isLoadingBatchGenerate || isLoadingGenerateForMatchId === match.match_id}
                                     className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto"
                                 >
                                     {isLoadingGenerateForMatchId === match.match_id ? <RefreshCw className="h-4 w-4 animate-spin mr-1"/> : <Lightbulb className="h-4 w-4 mr-1"/>}
-                                    Generate Pitch
+                                    {canUseAI ? 'Generate Pitch' : 'Create Manual Pitch'}
                                 </Button>
                             </div>
                         </div>
@@ -589,12 +662,16 @@ export default function PitchOutreach() {
   const [, navigate] = useLocation(); // Keep for potential future use
   const queryParams = new URLSearchParams(window.location.search);
   const initialCampaignIdFilter = queryParams.get("campaignId"); // Example: ?campaignId=some-uuid
+  const { user } = useAuth();
+  const { capabilities, isLoading: isLoadingCapabilities, canUseAI, isFreePlan, isAdmin } = usePitchCapabilities();
 
   const [activeTab, setActiveTab] = useState<string>("readyForDraft");
   const [editingDraft, setEditingDraft] = useState<PitchDraftForReview | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [previewPitch, setPreviewPitch] = useState<PitchReadyToSend | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [manualPitchMatch, setManualPitchMatch] = useState<ApprovedMatchForPitching | null>(null);
+  const [isManualEditorOpen, setIsManualEditorOpen] = useState(false);
 
   // Per-item loading states
   const [isLoadingGenerateForMatchId, setIsLoadingGenerateForMatchId] = useState<number | null>(null);
@@ -607,10 +684,19 @@ export default function PitchOutreach() {
   const [reviewDraftsPage, setReviewDraftsPage] = useState(1);
   const REVIEW_DRAFTS_PAGE_SIZE = 10;
 
-  // Fetch pitch templates for the dropdown
+  // Filter campaign ID based on user role - clients only see their own campaigns
+  const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string | null>(initialCampaignIdFilter);
+  const userRole = user?.role?.toLowerCase();
+  const isClient = userRole === 'client';
+
+  // Fetch pitch templates for the dropdown (only for non-clients)
   const { data: pitchTemplates = [], isLoading: isLoadingTemplates, error: templatesError } = useQuery<PitchTemplate[]>({
     queryKey: ["/pitch-templates/"],
     queryFn: async () => {
+        // Skip fetching templates for clients as they don't have access
+        if (isClient) {
+            return [];
+        }
         const response = await apiRequest("GET", "/pitch-templates/");
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: "Failed to fetch pitch templates" }));
@@ -618,6 +704,7 @@ export default function PitchOutreach() {
         }
         return response.json();
     },
+    enabled: !isClient && !!user, // Only fetch for staff/admin
     staleTime: 1000 * 60 * 5, // Cache for 5 mins
   });
 
@@ -625,11 +712,14 @@ export default function PitchOutreach() {
 
   // 1. Fetch Approved Matches without pitches (for "Ready for Draft" tab)
   const { data: approvedMatchesData, isLoading: isLoadingApprovedMatches, error: approvedMatchesError } = useQuery<ApprovedMatchForPitching[]>({
-    queryKey: ["approvedMatchesForPitching", initialCampaignIdFilter],
+    queryKey: ["approvedMatchesForPitching", selectedCampaignFilter, isClient],
     queryFn: async ({ queryKey }) => {
-      const [, campaignId] = queryKey as [string, string | null];
+      const [, campaignId, clientOnly] = queryKey as [string, string | null, boolean];
       let url = `/match-suggestions/approved-without-pitches`;
-      if (campaignId) url += `?campaign_id=${campaignId}`;
+      const params = new URLSearchParams();
+      if (campaignId) params.append('campaign_id', campaignId);
+      if (clientOnly) params.append('client_only', 'true');
+      if (params.toString()) url += `?${params.toString()}`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch approved matches without pitches");
       return response.json();
@@ -642,11 +732,12 @@ export default function PitchOutreach() {
   const { data: reviewTasksPageData, isLoading: isLoadingPitchDrafts, error: reviewDraftsError } = useQuery<{
     items: PitchDraftForReview[]; total: number; page: number; size: number; pages?: number; // pages might not be returned by all backends
   }>({
-    queryKey: ["pitchDraftsForReview", reviewDraftsPage, initialCampaignIdFilter],
+    queryKey: ["pitchDraftsForReview", reviewDraftsPage, selectedCampaignFilter, isClient],
     queryFn: async ({ queryKey }) => {
-      const [, page, campaignId] = queryKey as [string, number, string | null];
+      const [, page, campaignId, clientOnly] = queryKey as [string, number, string | null, boolean];
       let url = `/review-tasks/?task_type=pitch_review&status=pending&page=${page}&size=${REVIEW_DRAFTS_PAGE_SIZE}`;
       if (campaignId) url += `&campaign_id=${campaignId}`;
+      if (clientOnly) url += `&client_only=true`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch pitch drafts for review");
       // Backend status filter not working correctly - returns completed tasks when requesting pending
@@ -664,11 +755,12 @@ export default function PitchOutreach() {
 
   // 3. Fetch Pitches Ready to Send
   const { data: pitchesReadyData, isLoading: isLoadingReadyToSend, error: pitchesReadyError } = useQuery<PitchReadyToSend[]>({
-    queryKey: ["pitchesReadyToSend", initialCampaignIdFilter],
+    queryKey: ["pitchesReadyToSend", selectedCampaignFilter, isClient],
     queryFn: async ({ queryKey }) => {
-      const [, campaignId] = queryKey as [string, string | null];
+      const [, campaignId, clientOnly] = queryKey as [string, string | null, boolean];
       let url = `/pitches/?pitch_state__in=ready_to_send`; // Using __in filter as per backend documentation
       if (campaignId) url += `&campaign_id=${campaignId}`;
+      if (clientOnly) url += `&client_only=true`;
       const response = await apiRequest("GET", url);
       if (!response.ok) throw new Error("Failed to fetch pitches ready to send");
       // Assuming backend /pitches/ returns enriched PitchReadyToSend data
@@ -680,14 +772,15 @@ export default function PitchOutreach() {
 
   // 4. Fetch Sent Pitches
   const { data: sentPitchesData, isLoading: isLoadingSentPitches, error: sentPitchesError } = useQuery<SentPitchStatus[]>({
-    queryKey: ["sentPitchesStatus", initialCampaignIdFilter],
+    queryKey: ["sentPitchesStatus", selectedCampaignFilter, isClient],
     queryFn: async ({ queryKey }) => {
-      const [, campaignId] = queryKey as [string, string | null];
+      const [, campaignId, clientOnly] = queryKey as [string, string | null, boolean];
       // Build query with multiple pitch_state__in parameters
       const states = ['sent', 'opened', 'replied', 'clicked', 'replied_interested', 'live', 'paid', 'lost'];
       const params = new URLSearchParams();
       states.forEach(state => params.append('pitch_state__in', state));
       if (campaignId) params.append('campaign_id', campaignId);
+      if (clientOnly) params.append('client_only', 'true');
       
       const url = `/pitches/?${params.toString()}`;
       const response = await apiRequest("GET", url);
@@ -700,6 +793,7 @@ export default function PitchOutreach() {
 
 
   // --- Mutations ---
+  // AI Generation mutation (for paid users)
   const generatePitchDraftMutation = useMutation({
     mutationFn: async ({ matchId, pitch_template_id }: { matchId: number; pitch_template_id: string }) => {
       setIsLoadingGenerateForMatchId(matchId);
@@ -868,10 +962,30 @@ export default function PitchOutreach() {
 
 
   const handleGeneratePitch = (matchId: number, templateId: string) => {
-    if (!templateId) { toast({ title: "Template Required", description: "Please select a pitch template.", variant: "destructive"}); return; }
+    // Find the match for this ID
+    const match = approvedMatches.find(m => m.match_id === matchId);
+    
+    // If it's manual creation or user doesn't have AI access, open manual editor
+    if (templateId === "manual" || !canUseAI) {
+      if (match) {
+        setManualPitchMatch(match);
+        setIsManualEditorOpen(true);
+      }
+      return;
+    }
+    
+    // Otherwise, use AI generation (for paid users)
+    if (!templateId) { 
+      toast({ title: "Template Required", description: "Please select a pitch template.", variant: "destructive"}); 
+      return; 
+    }
     generatePitchDraftMutation.mutate({ matchId, pitch_template_id: templateId });
   };
   const handleGenerateBatchPitches = (items: { match_id: number; pitch_template_id: string }[]) => {
+    if (!canUseAI) {
+      toast({ title: "Premium Feature", description: "Batch AI pitch generation requires a Premium subscription.", variant: "destructive"});
+      return;
+    }
     generateBatchPitchDraftsMutation.mutate(items);
   };
   const handleApprovePitch = (pitchGenId: number) => { approvePitchDraftMutation.mutate(pitchGenId); };
@@ -887,6 +1001,16 @@ export default function PitchOutreach() {
     }
   };
 
+  // Show loading state while capabilities are being fetched
+  if (isLoadingCapabilities) {
+    return (
+      <div className="p-6">
+        <Skeleton className="h-12 w-1/3 mb-4" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -895,10 +1019,53 @@ export default function PitchOutreach() {
                 <Send className="mr-3 h-6 w-6 text-primary" />
                 Pitch Outreach & Management
             </h1>
-            <p className="text-gray-600">Oversee the entire pitch lifecycle from drafting to sending and tracking.</p>
+            <p className="text-gray-600">
+              {isClient 
+                ? "Create and manage pitches for your podcast outreach campaigns."
+                : "Oversee the entire pitch lifecycle from drafting to sending and tracking."}
+            </p>
         </div>
-        <EmailStatusBadge showConnectButton={true} showDisconnect={true} />
+        <div className="flex items-center gap-3">
+          {capabilities && (
+            <Badge variant={isFreePlan ? "secondary" : "default"} className="text-sm">
+              {capabilities.plan_type === 'admin' ? 'Admin' : 
+               capabilities.plan_type === 'paid' ? 'Premium' : 'Free'} Plan
+            </Badge>
+          )}
+          <EmailStatusBadge showConnectButton={true} showDisconnect={true} />
+        </div>
       </div>
+
+      {/* Show upgrade prompt for free users */}
+      {isFreePlan && (
+        <UpgradePrompt 
+          message={capabilities?.upgrade_message}
+          features={[
+            'AI-powered pitch generation',
+            'Access to all pitch templates',
+            'Unlimited pitches per month',
+            'Advanced analytics and tracking'
+          ]}
+          variant="banner"
+        />
+      )}
+
+      {/* Campaign filter for clients */}
+      {isClient && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Filter by Campaign</CardTitle>
+            <CardDescription>Select a campaign to view its pitches</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CampaignSelector 
+              selectedCampaignId={selectedCampaignFilter}
+              onCampaignChange={setSelectedCampaignFilter}
+              isClient={true}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-1">
@@ -915,8 +1082,10 @@ export default function PitchOutreach() {
             onGenerateBatch={handleGenerateBatchPitches}
             isLoadingGenerateForMatchId={isLoadingGenerateForMatchId}
             isLoadingBatchGenerate={isLoadingBatchGenerate}
-            templates={pitchTemplates}
+            templates={isFreePlan ? [] : pitchTemplates}
             isLoadingMatches={isLoadingApprovedMatches || isLoadingTemplates}
+            canUseAI={canUseAI}
+            isFreePlan={isFreePlan}
           />
           {approvedMatchesError && <p className="text-red-500 mt-2">Error loading approved matches: {(approvedMatchesError as Error).message}</p>}
           {templatesError && <p className="text-red-500 mt-2">Error loading pitch templates: {(templatesError as Error).message}</p>}
@@ -1025,6 +1194,22 @@ export default function PitchOutreach() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Manual Pitch Editor Modal */}
+      <ManualPitchEditor
+        isOpen={isManualEditorOpen}
+        onClose={() => {
+          setIsManualEditorOpen(false);
+          setManualPitchMatch(null);
+        }}
+        match={manualPitchMatch || { match_id: 0 }}
+        onSuccess={() => {
+          // Refresh the drafts list
+          tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+          tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
+          setActiveTab("draftsReview");
+        }}
+      />
     </div>
   );
 }

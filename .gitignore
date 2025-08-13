@@ -13,3 +13,7 @@ vite.config.ts.*
 
 # Claude AI settings
 .claude
+
+# Screenshot/image files to ignore
+non-responsive.png
+top section.png

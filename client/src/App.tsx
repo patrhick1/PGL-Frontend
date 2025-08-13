@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -103,6 +104,7 @@ function Router() {
                 <Route path="/my-campaigns/:campaignId">{params => <CampaignDetail campaignIdParam={params.campaignId} />}</Route>
                 <Route path="/profile-setup" component={ProfileSetup} />
                 <Route path="/discover" component={PodcastDiscovery} /> {/* Client's limited discovery */}
+                <Route path="/pitch-outreach" component={PitchOutreach} /> {/* Pitch outreach for clients */}
                 <Route path="/media/:mediaId" component={MediaDetail} /> {/* Add new route */}
               </>
             )}
@@ -147,12 +149,14 @@ function CampaignDetailWrapper(props: { params: { campaignId: string } }) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
