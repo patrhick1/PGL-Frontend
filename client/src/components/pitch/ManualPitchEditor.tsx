@@ -22,6 +22,7 @@ interface ManualPitchEditorProps {
 export function ManualPitchEditor({ isOpen, onClose, match, onSuccess }: ManualPitchEditorProps) {
   const [subjectLine, setSubjectLine] = useState('');
   const [bodyText, setBodyText] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -48,11 +49,18 @@ export function ManualPitchEditor({ isOpen, onClose, match, onSuccess }: ManualP
     setIsSubmitting(true);
 
     try {
-      const response = await apiRequest('POST', '/pitches/create-manual', {
+      const requestBody: any = {
         match_id: match.match_id,
         subject_line: subjectLine,
         body_text: bodyText,
-      });
+      };
+      
+      // Only include recipient_email if it's provided
+      if (recipientEmail.trim()) {
+        requestBody.recipient_email = recipientEmail;
+      }
+      
+      const response = await apiRequest('POST', '/pitches/create-manual', requestBody);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Failed to create pitch' }));
@@ -67,6 +75,7 @@ export function ManualPitchEditor({ isOpen, onClose, match, onSuccess }: ManualP
       // Reset form
       setSubjectLine('');
       setBodyText('');
+      setRecipientEmail('');
       
       // Notify parent of success
       onSuccess();
@@ -162,6 +171,20 @@ Sincerely,
                 Professional Approach
               </Button>
             </div>
+          </div>
+
+          {/* Recipient Email */}
+          <div className="space-y-2">
+            <Label htmlFor="recipient">Recipient Email (Optional)</Label>
+            <Input
+              id="recipient"
+              type="email"
+              placeholder="podcast@example.com (leave blank to use default)"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-gray-500">Override the default contact email for this podcast</p>
           </div>
 
           {/* Subject Line */}

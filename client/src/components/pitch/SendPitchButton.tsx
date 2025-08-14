@@ -49,7 +49,8 @@ export function SendPitchButton({
       setShowConnectDialog(true);
       return;
     }
-    sendPitch(pitchGenId);
+    // Pass recipient email if provided
+    sendPitch(pitchGenId, recipientEmail);
   };
 
   const handleConnect = () => {

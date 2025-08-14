@@ -36,17 +36,19 @@ export function usePitchSending() {
 
   // Send single pitch via Nylas
   const sendPitchMutation = useMutation({
-    mutationFn: async (pitchGenId: number) => {
+    mutationFn: async ({ pitchGenId, recipientEmail }: { pitchGenId: number; recipientEmail?: string }) => {
       if (!isEmailConnected) {
         throw new Error('Please connect your email account first');
       }
 
       setSendingPitchIds(prev => new Set(prev).add(pitchGenId));
       
+      const body = recipientEmail ? { recipient_email: recipientEmail } : {};
+      
       const response = await apiRequest(
         'POST',
         `/pitches/send-nylas/${pitchGenId}`,
-        {}
+        body
       );
 
       if (!response.ok) {
@@ -77,7 +79,7 @@ export function usePitchSending() {
         variant: 'destructive',
       });
     },
-    onSettled: (_, __, pitchGenId) => {
+    onSettled: (_, __, { pitchGenId }) => {
       setSendingPitchIds(prev => {
         const next = new Set(prev);
         next.delete(pitchGenId);
@@ -230,7 +232,8 @@ export function usePitchSending() {
     isLoadingStatus,
     
     // Actions
-    sendPitch: sendPitchMutation.mutate,
+    sendPitch: (pitchGenId: number, recipientEmail?: string) => 
+      sendPitchMutation.mutate({ pitchGenId, recipientEmail }),
     sendBatch: sendBatchMutation.mutate,
     connectEmail,
     disconnectEmail: disconnectEmailMutation.mutate,

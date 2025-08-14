@@ -28,6 +28,7 @@ import { BatchSendButton } from "@/components/pitch/BatchSendButton";
 import { usePitchCapabilities } from "@/hooks/usePitchCapabilities";
 import { UpgradePrompt } from "@/components/pitch/UpgradePrompt";
 import { ManualPitchEditor } from "@/components/pitch/ManualPitchEditor";
+import { RecipientEmailEditor } from "@/components/pitch/RecipientEmailEditor";
 import { useAuth } from "@/hooks/useAuth";
 
 // --- Interfaces (Aligned with expected enriched backend responses) ---
@@ -76,6 +77,7 @@ interface PitchReadyToSend { // From GET /pitches/?pitch_state=ready_to_send (en
   final_text?: string | null; // From pitch_generations
   draft_text?: string | null; // Fallback from pitch_generations
   subject_line?: string | null; // From pitches table
+  recipient_email?: string | null; // Recipient email address
   media_name?: string | null;
   campaign_name?: string | null;
   client_name?: string | null;
@@ -494,6 +496,7 @@ function ReadyToSendTab({
 }) {
     const [selectedPitchGenIds, setSelectedPitchGenIds] = useState<number[]>([]);
     const [selectAll, setSelectAll] = useState(false);
+    const [pitchEmails, setPitchEmails] = useState<Record<number, string>>({});
 
     const handleSelectAll = (checked: boolean) => {
         setSelectAll(checked);
@@ -573,6 +576,16 @@ function ReadyToSendTab({
                                 <div className="flex-1 mb-3 sm:mb-0">
                                     <h4 className="font-semibold text-gray-800">{pitch.media_name || `Media ID: ${pitch.media_id}`}</h4>
                                     <p className="text-xs text-gray-500">Campaign: {pitch.campaign_name || 'N/A'} (Client: {pitch.client_name || 'N/A'})</p>
+                                    <div className="mt-1">
+                                        <RecipientEmailEditor
+                                            pitchGenId={pitch.pitch_gen_id}
+                                            currentEmail={pitchEmails[pitch.pitch_gen_id] || pitch.recipient_email}
+                                            onEmailUpdated={(newEmail) => {
+                                                setPitchEmails(prev => ({ ...prev, [pitch.pitch_gen_id]: newEmail }));
+                                            }}
+                                            compact
+                                        />
+                                    </div>
                                     <p className="text-xs text-gray-600 mt-1 italic">Subject: {pitch.subject_line || "Not set"}</p>
                                     <p className="text-xs text-gray-600 mt-1 italic line-clamp-2">
                                         Preview: {(pitch.final_text || pitch.draft_text || "No content").substring(0,100) + "..."}
@@ -672,6 +685,8 @@ export default function PitchOutreach() {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [manualPitchMatch, setManualPitchMatch] = useState<ApprovedMatchForPitching | null>(null);
   const [isManualEditorOpen, setIsManualEditorOpen] = useState(false);
+  const [editingRecipientEmail, setEditingRecipientEmail] = useState(false);
+  const [tempRecipientEmail, setTempRecipientEmail] = useState("");
 
   // Per-item loading states
   const [isLoadingGenerateForMatchId, setIsLoadingGenerateForMatchId] = useState<number | null>(null);
@@ -1133,7 +1148,12 @@ export default function PitchOutreach() {
       />
 
       {/* Pitch Preview Modal */}
-      <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>
+      <Dialog open={isPreviewModalOpen} onOpenChange={(open) => {
+        setIsPreviewModalOpen(open);
+        if (!open) {
+          setEditingRecipientEmail(false);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pitch Preview</DialogTitle>
@@ -1152,6 +1172,76 @@ export default function PitchOutreach() {
                     <ExternalLink className="h-3 w-3 mr-1"/> {previewPitch.media_website}
                   </a>
                 )}
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-sm text-gray-700 mb-1">Recipient Email:</h4>
+                <div className="flex items-center gap-2">
+                  {editingRecipientEmail ? (
+                    <>
+                      <Input
+                        type="email"
+                        value={tempRecipientEmail}
+                        onChange={(e) => setTempRecipientEmail(e.target.value)}
+                        placeholder="Enter recipient email"
+                        className="flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          if (tempRecipientEmail && tempRecipientEmail.includes('@')) {
+                            try {
+                              const response = await apiRequest('PUT', `/pitches/generations/${previewPitch.pitch_gen_id}/content`, {
+                                recipient_email: tempRecipientEmail
+                              });
+                              if (response.ok) {
+                                setPreviewPitch({ ...previewPitch, recipient_email: tempRecipientEmail });
+                                toast({ title: "Email updated", description: "Recipient email has been updated successfully." });
+                                setEditingRecipientEmail(false);
+                              } else {
+                                throw new Error('Failed to update email');
+                              }
+                            } catch (error) {
+                              toast({ 
+                                title: "Error", 
+                                description: "Failed to update recipient email. Please try again.", 
+                                variant: "destructive" 
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingRecipientEmail(false);
+                          setTempRecipientEmail(previewPitch.recipient_email || "");
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm bg-gray-50 p-2 rounded flex-1">
+                        {previewPitch.recipient_email || "No recipient email set"}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingRecipientEmail(true);
+                          setTempRecipientEmail(previewPitch.recipient_email || "");
+                        }}
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" /> Edit
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
               
               <div>
