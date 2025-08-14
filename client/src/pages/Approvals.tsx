@@ -276,6 +276,7 @@ function ReviewTaskItem({ task }: { task: ReviewTask }) {
       return response.json();
     },
     onSuccess: (data, variables) => {
+      // Invalidate both the filtered and unfiltered queries
       tanstackQueryClient.invalidateQueries({ queryKey: ["/review-tasks/enhanced"] });
       toast({ title: "Action Successful", description: `Task ${variables.payload.status || 'processed'}.` });
     },
@@ -499,18 +500,24 @@ export default function Approvals() {
     pages?: number;
   }
 
-  // Fetch all data without pagination params to see if backend supports pagination
-  // IMPORTANT: For clients, the backend should filter review tasks to only include tasks for campaigns they own
-  // This should be implemented on the backend by checking: campaign.person_id == current_user.person_id
-  const { data: allDataResponse, isLoading, error, isFetching } = useQuery<ReviewTask[], Error>({
+  // Always fetch ALL tasks, then filter client-side
+  const { data: allTasksData, isLoading, error, isFetching } = useQuery<ReviewTask[], Error>({
     queryKey: ["/review-tasks/enhanced", { 
-      status: statusFilter === "all" ? undefined : statusFilter, 
       task_type: "match_suggestion"
+      // Always fetch all, no status filter
     }],
     placeholderData: (previousData) => previousData,
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnWindowFocus: false, // Don't refetch on window focus
   });
+
+  // Use all tasks for stats
+  const allTasksForStats = allTasksData || [];
+  
+  // Filter tasks client-side based on statusFilter
+  const allDataResponse = statusFilter === "all" 
+    ? allTasksData 
+    : allTasksData?.filter(task => task.status === statusFilter);
   
   // Client-side pagination
   const allTasks = allDataResponse || [];
@@ -551,13 +558,14 @@ export default function Approvals() {
     return relatedIdMatch || notesMatch;
   });
 
-  // Calculate stats from all tasks
+  // Calculate stats from all tasks (unfiltered)
+  const statsData = allTasksForStats || [];
   const stats = {
-    total: totalTasks,
-    pending: allTasks.filter((task: ReviewTask) => task.status === 'pending').length,
-    approved: allTasks.filter((task: ReviewTask) => task.status === 'approved').length,
-    completed: allTasks.filter((task: ReviewTask) => task.status === 'completed').length,
-    rejected: allTasks.filter((task: ReviewTask) => task.status === 'rejected').length,
+    total: statsData.length,
+    pending: statsData.filter((task: ReviewTask) => task.status === 'pending').length,
+    approved: statsData.filter((task: ReviewTask) => task.status === 'approved').length,
+    completed: statsData.filter((task: ReviewTask) => task.status === 'completed').length,
+    rejected: statsData.filter((task: ReviewTask) => task.status === 'rejected').length,
   };
   // Define which keys from stats map to reviewTaskStatusConfig
   const statusKeysForStats: Array<keyof Omit<typeof stats, 'total'>> = ['pending', 'approved', 'completed', 'rejected'];

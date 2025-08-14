@@ -40,13 +40,13 @@ interface NavigationItem {
 // --- CLIENT NAVIGATION ---
 const clientNavigationItems: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: BarChart3, roles: ['client'] },
-  { name: "Inbox", href: "/inbox", icon: InboxIcon, roles: ['client'] }, // Nylas inbox
-  { name: "Analytics", href: "/analytics", icon: TrendingUp, roles: ['client'] }, // Analytics dashboards
   { name: "Guest Profile Setup", href: "/profile-setup", icon: ClipboardList, roles: ['client'] },
   { name: "My Campaigns", href: "/my-campaigns", icon: FolderOpen, roles: ['client'] },
   { name: "Approve Matches", href: "/approvals", icon: CheckCircle, roles: ['client'] }, // Approvals page will filter for clients
   { name: "Pitch Outreach", href: "/pitch-outreach", icon: Send, roles: ['client'] }, // New pitch outreach for clients
-  { name: "Track Placements", href: "/placement-tracking", icon: TrendingUp, roles: ['client'] }
+  { name: "Inbox", href: "/inbox", icon: InboxIcon, roles: ['client'] }, // Nylas inbox
+  { name: "Track Placements", href: "/placement-tracking", icon: TrendingUp, roles: ['client'] },
+  { name: "Analytics", href: "/analytics", icon: TrendingUp, roles: ['client'] } // Analytics dashboards
 ];
 
 // --- INTERNAL STAFF/ADMIN NAVIGATION ---

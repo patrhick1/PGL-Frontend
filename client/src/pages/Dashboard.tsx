@@ -187,7 +187,7 @@ export default function Dashboard() {
 
 
   const handleBookDemo = () => {
-    window.open("https://calendly.com", "_blank");
+    window.open("https://calendly.com/gentoftech/catch-up-call3", "_blank");
   };
 
   if (authLoading) {
