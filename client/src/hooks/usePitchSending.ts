@@ -66,7 +66,9 @@ export function usePitchSending() {
         description: `Sent to ${data.recipient_email || 'recipient'} via Gmail`,
       });
 
-      // Invalidate relevant queries
+      // Invalidate relevant queries to refresh all tabs
+      queryClient.invalidateQueries({ queryKey: ['approvedMatchesForPitching'] });
+      queryClient.invalidateQueries({ queryKey: ['pitchDraftsForReview'] });
       queryClient.invalidateQueries({ queryKey: ['pitchesReadyToSend'] });
       queryClient.invalidateQueries({ queryKey: ['sentPitchesStatus'] });
       queryClient.invalidateQueries({ queryKey: ['/inbox/threads'] });
@@ -138,7 +140,9 @@ export function usePitchSending() {
         variant: failed > 0 ? 'default' : 'default',
       });
 
-      // Invalidate queries
+      // Invalidate queries to refresh all tabs
+      queryClient.invalidateQueries({ queryKey: ['approvedMatchesForPitching'] });
+      queryClient.invalidateQueries({ queryKey: ['pitchDraftsForReview'] });
       queryClient.invalidateQueries({ queryKey: ['pitchesReadyToSend'] });
       queryClient.invalidateQueries({ queryKey: ['sentPitchesStatus'] });
       queryClient.invalidateQueries({ queryKey: ['/inbox/threads'] });

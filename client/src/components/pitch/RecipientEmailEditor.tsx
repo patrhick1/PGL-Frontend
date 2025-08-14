@@ -10,13 +10,15 @@ interface RecipientEmailEditorProps {
   currentEmail?: string | null;
   onEmailUpdated?: (newEmail: string) => void;
   compact?: boolean;
+  method?: 'PUT' | 'PATCH'; // Allow customizing the HTTP method
 }
 
 export function RecipientEmailEditor({
   pitchGenId,
   currentEmail,
   onEmailUpdated,
-  compact = false
+  compact = false,
+  method = 'PUT' // Default to PUT for backward compatibility
 }: RecipientEmailEditorProps) {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -35,7 +37,7 @@ export function RecipientEmailEditor({
 
     setIsUpdating(true);
     try {
-      const response = await apiRequest('PUT', `/pitches/generations/${pitchGenId}/content`, {
+      const response = await apiRequest(method, `/pitches/generations/${pitchGenId}/content`, {
         recipient_email: tempEmail
       });
 

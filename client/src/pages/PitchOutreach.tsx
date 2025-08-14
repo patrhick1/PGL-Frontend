@@ -584,6 +584,7 @@ function ReadyToSendTab({
                                                 setPitchEmails(prev => ({ ...prev, [pitch.pitch_gen_id]: newEmail }));
                                             }}
                                             compact
+                                            method="PATCH"
                                         />
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1 italic">Subject: {pitch.subject_line || "Not set"}</p>
@@ -687,6 +688,10 @@ export default function PitchOutreach() {
   const [isManualEditorOpen, setIsManualEditorOpen] = useState(false);
   const [editingRecipientEmail, setEditingRecipientEmail] = useState(false);
   const [tempRecipientEmail, setTempRecipientEmail] = useState("");
+  const [editingSubject, setEditingSubject] = useState(false);
+  const [tempSubject, setTempSubject] = useState("");
+  const [editingBody, setEditingBody] = useState(false);
+  const [tempBody, setTempBody] = useState("");
 
   // Per-item loading states
   const [isLoadingGenerateForMatchId, setIsLoadingGenerateForMatchId] = useState<number | null>(null);
@@ -818,8 +823,7 @@ export default function PitchOutreach() {
     },
     onSuccess: (data) => {
       toast({ title: "Pitch Draft Generated", description: data.message || "Draft created and is ready for review." });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+      refreshAllPitchData();
       setActiveTab("draftsReview");
     },
     onError: (error: any) => { toast({ title: "Generation Failed", description: error.message, variant: "destructive" }); },
@@ -842,8 +846,7 @@ export default function PitchOutreach() {
         title: "Batch Generation Complete", 
         description: `Successfully generated ${count} pitch draft${count !== 1 ? 's' : ''}. Ready for review.` 
       });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+      refreshAllPitchData();
       setActiveTab("draftsReview");
     },
     onError: (error: any) => { 
@@ -861,8 +864,7 @@ export default function PitchOutreach() {
     },
     onSuccess: () => {
       toast({ title: "Pitch Approved", description: "Pitch draft approved and moved to 'Ready to Send'." });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchesReadyToSend"] });
+      refreshAllPitchData();
       setActiveTab("readyToSend");
     },
     onError: (error: any) => { toast({ title: "Approval Failed", description: error.message, variant: "destructive" }); },
@@ -881,7 +883,7 @@ export default function PitchOutreach() {
     },
     onSuccess: () => {
       toast({ title: "Draft Updated", description: "Pitch draft and subject line saved." });
-      tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+      refreshAllPitchData();
       setIsEditModalOpen(false); setEditingDraft(null);
     },
     onError: (error: any) => { toast({ title: "Update Failed", description: error.message, variant: "destructive" }); },
@@ -951,8 +953,7 @@ export default function PitchOutreach() {
             variant: failCount > 0 ? "default" : "default"
         });
         
-        tanstackQueryClient.invalidateQueries({ queryKey: ["pitchesReadyToSend"] });
-        tanstackQueryClient.invalidateQueries({ queryKey: ["sentPitchesStatus"] });
+        refreshAllPitchData();
         setActiveTab("sentPitches");
     },
     onError: (error: any) => { 
@@ -1007,6 +1008,14 @@ export default function PitchOutreach() {
   const handleSendPitch = (pitchGenId: number) => { sendPitchMutation.mutate(pitchGenId); };
   const handleBulkSendPitches = (pitchGenIds: number[]) => { bulkSendPitchesMutation.mutate(pitchGenIds); };
   const handleOpenEditModal = (draft: PitchDraftForReview) => { setEditingDraft(draft); setIsEditModalOpen(true); };
+
+  // Helper function to refresh all pitch-related data for better UX
+  const refreshAllPitchData = () => {
+    tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
+    tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
+    tanstackQueryClient.invalidateQueries({ queryKey: ["pitchesReadyToSend"] });
+    tanstackQueryClient.invalidateQueries({ queryKey: ["sentPitchesStatus"] });
+  };
   const handleSaveEditedDraft = (pitchGenId: number, data: EditDraftFormData) => { updatePitchDraftMutation.mutate({ pitchGenId, data }); };
   const handlePreviewPitch = (pitch: PitchReadyToSend) => { setPreviewPitch(pitch); setIsPreviewModalOpen(true); };
 
@@ -1152,6 +1161,8 @@ export default function PitchOutreach() {
         setIsPreviewModalOpen(open);
         if (!open) {
           setEditingRecipientEmail(false);
+          setEditingSubject(false);
+          setEditingBody(false);
         }
       }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1191,7 +1202,7 @@ export default function PitchOutreach() {
                         onClick={async () => {
                           if (tempRecipientEmail && tempRecipientEmail.includes('@')) {
                             try {
-                              const response = await apiRequest('PUT', `/pitches/generations/${previewPitch.pitch_gen_id}/content`, {
+                              const response = await apiRequest('PATCH', `/pitches/generations/${previewPitch.pitch_gen_id}/content`, {
                                 recipient_email: tempRecipientEmail
                               });
                               if (response.ok) {
@@ -1246,14 +1257,142 @@ export default function PitchOutreach() {
               
               <div>
                 <h4 className="font-semibold text-sm text-gray-700 mb-1">Subject:</h4>
-                <p className="text-sm bg-gray-50 p-2 rounded">{previewPitch.subject_line || "No subject line set"}</p>
+                <div className="flex items-center gap-2">
+                  {editingSubject ? (
+                    <>
+                      <Input
+                        value={tempSubject}
+                        onChange={(e) => setTempSubject(e.target.value)}
+                        placeholder="Enter subject line"
+                        className="flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          if (tempSubject.trim()) {
+                            try {
+                              const response = await apiRequest('PATCH', `/pitches/generations/${previewPitch.pitch_gen_id}/content`, {
+                                new_subject_line: tempSubject
+                              });
+                              if (response.ok) {
+                                setPreviewPitch({ ...previewPitch, subject_line: tempSubject });
+                                toast({ title: "Subject updated", description: "Subject line has been updated successfully." });
+                                setEditingSubject(false);
+                              } else {
+                                throw new Error('Failed to update subject');
+                              }
+                            } catch (error) {
+                              toast({ 
+                                title: "Error", 
+                                description: "Failed to update subject line. Please try again.", 
+                                variant: "destructive" 
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingSubject(false);
+                          setTempSubject(previewPitch.subject_line || "");
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm bg-gray-50 p-2 rounded flex-1">
+                        {previewPitch.subject_line || "No subject line set"}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingSubject(true);
+                          setTempSubject(previewPitch.subject_line || "");
+                        }}
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" /> Edit
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
               
               <div>
                 <h4 className="font-semibold text-sm text-gray-700 mb-1">Body:</h4>
-                <div className="bg-gray-50 p-4 rounded whitespace-pre-wrap text-sm">
-                  {previewPitch.final_text || previewPitch.draft_text || "No content available"}
-                </div>
+                {editingBody ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={tempBody}
+                      onChange={(e) => setTempBody(e.target.value)}
+                      placeholder="Enter email body"
+                      className="min-h-[300px] text-sm"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          if (tempBody.trim()) {
+                            try {
+                              const response = await apiRequest('PATCH', `/pitches/generations/${previewPitch.pitch_gen_id}/content`, {
+                                draft_text: tempBody
+                              });
+                              if (response.ok) {
+                                setPreviewPitch({ ...previewPitch, final_text: tempBody });
+                                toast({ title: "Body updated", description: "Email body has been updated successfully." });
+                                setEditingBody(false);
+                                refreshAllPitchData();
+                              } else {
+                                throw new Error('Failed to update body');
+                              }
+                            } catch (error) {
+                              toast({ 
+                                title: "Error", 
+                                description: "Failed to update email body. Please try again.", 
+                                variant: "destructive" 
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <Check className="h-3 w-3 mr-1" /> Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingBody(false);
+                          setTempBody(previewPitch.final_text || previewPitch.draft_text || "");
+                        }}
+                      >
+                        <X className="h-3 w-3 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="bg-gray-50 p-4 rounded whitespace-pre-wrap text-sm">
+                      {previewPitch.final_text || previewPitch.draft_text || "No content available"}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        setEditingBody(true);
+                        setTempBody(previewPitch.final_text || previewPitch.draft_text || "");
+                      }}
+                    >
+                      <Edit3 className="h-3 w-3 mr-1" /> Edit Body
+                    </Button>
+                  </div>
+                )}
               </div>
               
               <div className="text-xs text-gray-500">
@@ -1294,9 +1433,8 @@ export default function PitchOutreach() {
         }}
         match={manualPitchMatch || { match_id: 0 }}
         onSuccess={() => {
-          // Refresh the drafts list
-          tanstackQueryClient.invalidateQueries({ queryKey: ["pitchDraftsForReview"] });
-          tanstackQueryClient.invalidateQueries({ queryKey: ["approvedMatchesForPitching"] });
+          // Refresh all pitch data for better UX
+          refreshAllPitchData();
           setActiveTab("draftsReview");
         }}
       />
